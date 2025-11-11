@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #111827;
+  --foreground: #f9fafb;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.blog-content h2,
+.blog-content h3 {
+  color: #f9fafb;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.blog-content p {
+  margin-bottom: 0.75rem;
+  line-height: 1.6;
+}
+
+.blog-content a {
+  color: #60a5fa;
+}
+
+.blog-content ul,
+.blog-content ol {
+  margin-left: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
