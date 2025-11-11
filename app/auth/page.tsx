@@ -20,7 +20,6 @@ import {
 export default function AuthPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [isSignUp, setIsSignUp] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -32,22 +31,13 @@ export default function AuthPage() {
     setError(null)
 
     try {
-      if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-        })
-        if (error) throw error
-        alert('Conta criada! Verifique seu email para confirmar.')
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
-        if (error) throw error
-        router.push('/dashboard')
-        router.refresh()
-      }
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (error) throw error
+      router.push('/dashboard')
+      router.refresh()
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -89,6 +79,8 @@ export default function AuthPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="seu@email.com"
                     size="lg"
+                    px={4}
+                    py={3}
                     bg="gray.700"
                     borderColor="gray.600"
                     color="gray.50"
@@ -107,6 +99,8 @@ export default function AuthPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Digite sua senha"
                     size="lg"
+                    px={4}
+                    py={3}
                     bg="gray.700"
                     borderColor="gray.600"
                     color="gray.50"
@@ -130,26 +124,10 @@ export default function AuthPage() {
                   loading={loading}
                   loadingText="Carregando..."
                 >
-                  {isSignUp ? 'Criar Conta' : 'Entrar'}
+                  Entrar
                 </Button>
               </VStack>
             </form>
-
-            <Box textAlign="center" mt={2}>
-              <Button
-                variant="ghost"
-                colorPalette="blue"
-                size="sm"
-                onClick={() => {
-                  setIsSignUp(!isSignUp)
-                  setError(null)
-                }}
-              >
-                {isSignUp
-                  ? 'Já tem uma conta? Entrar'
-                  : 'Não tem uma conta? Criar conta'}
-              </Button>
-            </Box>
           </VStack>
         </Box>
       </Container>
