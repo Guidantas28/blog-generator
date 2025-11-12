@@ -14,11 +14,65 @@ export interface WordPressPost {
   excerpt?: string
   featured_media?: number
   status?: 'publish' | 'draft'
+  categories?: number[]
   meta?: {
     _yoast_wpseo_title?: string
     _yoast_wpseo_metadesc?: string
     _yoast_wpseo_focuskw?: string
   }
+}
+
+/**
+ * Busca ou cria uma categoria no WordPress
+ */
+export async function getOrCreateCategory(
+  site: WordPressSite,
+  categoryName: string
+): Promise<number> {
+  const credentials = btoa(`${site.username}:${site.password}`)
+  
+  // Primeiro, tentar buscar a categoria existente
+  const searchResponse = await fetch(
+    `${site.url}/wp-json/wp/v2/categories?search=${encodeURIComponent(categoryName)}`,
+    {
+      method: 'GET',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+      },
+    }
+  )
+
+  if (searchResponse.ok) {
+    const categories = await searchResponse.json()
+    // Procurar categoria exata (case-insensitive)
+    const existingCategory = categories.find(
+      (cat: any) => cat.name.toLowerCase() === categoryName.toLowerCase()
+    )
+    if (existingCategory) {
+      return existingCategory.id
+    }
+  }
+
+  // Se não encontrou, criar a categoria
+  const createResponse = await fetch(`${site.url}/wp-json/wp/v2/categories`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Basic ${credentials}`,
+    },
+    body: JSON.stringify({
+      name: categoryName,
+      slug: categoryName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+    }),
+  })
+
+  if (!createResponse.ok) {
+    const error = await createResponse.text()
+    throw new Error(`Erro ao criar categoria no WordPress: ${error}`)
+  }
+
+  const newCategory = await createResponse.json()
+  return newCategory.id
 }
 
 export async function createWordPressPost(
@@ -28,19 +82,26 @@ export async function createWordPressPost(
   // Criar credenciais básicas para autenticação WordPress REST API
   const credentials = btoa(`${site.username}:${site.password}`)
   
+  const postData: any = {
+    title: post.title,
+    content: post.content,
+    excerpt: post.excerpt,
+    status: post.status || 'publish',
+    featured_media: post.featured_media,
+  }
+
+  // Adicionar categorias se fornecidas
+  if (post.categories && post.categories.length > 0) {
+    postData.categories = post.categories
+  }
+  
   const response = await fetch(`${site.url}/wp-json/wp/v2/posts`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Basic ${credentials}`,
     },
-    body: JSON.stringify({
-      title: post.title,
-      content: post.content,
-      excerpt: post.excerpt,
-      status: post.status || 'publish',
-      featured_media: post.featured_media,
-    }),
+    body: JSON.stringify(postData),
   })
 
   if (!response.ok) {

@@ -28,6 +28,7 @@ interface AutomationSetting {
   business_category: string
   days_per_week: number
   frequency: 'weekly' | 'biweekly' | 'monthly'
+  selected_days?: number[]
   site_name?: string
   created_at: string
 }
@@ -53,7 +54,18 @@ export default function AutomationSettings({ userId }: { userId: string }) {
     business_category: '',
     days_per_week: 1,
     frequency: 'weekly' as 'weekly' | 'biweekly' | 'monthly',
+    selected_days: [] as number[],
   })
+
+  const daysOfWeek = [
+    { value: 0, label: 'Domingo' },
+    { value: 1, label: 'Segunda' },
+    { value: 2, label: 'Terça' },
+    { value: 3, label: 'Quarta' },
+    { value: 4, label: 'Quinta' },
+    { value: 5, label: 'Sexta' },
+    { value: 6, label: 'Sábado' },
+  ]
 
   useEffect(() => {
     loadSites()
@@ -118,12 +130,23 @@ export default function AutomationSettings({ userId }: { userId: string }) {
     setMessage(null)
 
     try {
+      // Validar que a quantidade de dias selecionados corresponde a days_per_week
+      if (formData.selected_days.length !== formData.days_per_week) {
+        setMessage({
+          type: 'error',
+          text: `Você deve selecionar exatamente ${formData.days_per_week} dia(s) da semana`,
+        })
+        setSaving(false)
+        return
+      }
+
       const automationData = {
         user_id: userId,
         site_id: formData.site_id,
         business_category: formData.business_category.trim(),
         days_per_week: formData.days_per_week,
         frequency: formData.frequency,
+        selected_days: formData.selected_days,
         updated_at: new Date().toISOString(),
       }
 
@@ -149,6 +172,7 @@ export default function AutomationSettings({ userId }: { userId: string }) {
         business_category: '',
         days_per_week: 1,
         frequency: 'weekly',
+        selected_days: [],
       })
       setShowForm(false)
       setEditingId(null)
@@ -170,6 +194,7 @@ export default function AutomationSettings({ userId }: { userId: string }) {
       business_category: automation.business_category,
       days_per_week: automation.days_per_week,
       frequency: automation.frequency,
+      selected_days: automation.selected_days || [],
     })
     setEditingId(automation.id)
     setShowForm(true)
@@ -203,10 +228,38 @@ export default function AutomationSettings({ userId }: { userId: string }) {
       business_category: '',
       days_per_week: 1,
       frequency: 'weekly',
+      selected_days: [],
     })
     setShowForm(false)
     setEditingId(null)
     setMessage(null)
+  }
+
+  const handleDayToggle = (dayValue: number) => {
+    const currentSelected = formData.selected_days || []
+    const isSelected = currentSelected.includes(dayValue)
+
+    if (isSelected) {
+      // Remover dia
+      setFormData({
+        ...formData,
+        selected_days: currentSelected.filter((d) => d !== dayValue),
+      })
+    } else {
+      // Adicionar dia, mas respeitando o limite
+      if (currentSelected.length < formData.days_per_week) {
+        setFormData({
+          ...formData,
+          selected_days: [...currentSelected, dayValue].sort((a, b) => a - b),
+        })
+      } else {
+        setMessage({
+          type: 'error',
+          text: `Você só pode selecionar ${formData.days_per_week} dia(s) por semana`,
+        })
+        setTimeout(() => setMessage(null), 3000)
+      }
+    }
   }
 
   const getFrequencyLabel = (frequency: string) => {
@@ -247,6 +300,7 @@ export default function AutomationSettings({ userId }: { userId: string }) {
                   business_category: '',
                   days_per_week: 1,
                   frequency: 'weekly',
+                  selected_days: [],
                 })
               }}
               colorPalette="blue"
@@ -341,12 +395,17 @@ export default function AutomationSettings({ userId }: { userId: string }) {
                   min={1}
                   max={7}
                   value={formData.days_per_week}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const newDaysPerWeek = parseInt(e.target.value) || 1
+                    const currentSelected = formData.selected_days || []
+                    // Ajustar dias selecionados se necessário
+                    const adjustedSelected = currentSelected.slice(0, newDaysPerWeek)
                     setFormData({
                       ...formData,
-                      days_per_week: parseInt(e.target.value) || 1,
+                      days_per_week: newDaysPerWeek,
+                      selected_days: adjustedSelected,
                     })
-                  }
+                  }}
                   bg="gray.600"
                   borderColor="gray.500"
                   color="gray.50"
@@ -359,6 +418,62 @@ export default function AutomationSettings({ userId }: { userId: string }) {
                   Quantos dias por semana você deseja gerar conteúdo automaticamente
                 </Text>
               </FieldRoot>
+
+              {formData.days_per_week > 0 && (
+                <FieldRoot>
+                  <FieldLabel color="gray.300" fontWeight="medium" mb={2}>
+                    Selecione os Dias da Semana ({formData.selected_days.length}/{formData.days_per_week})
+                  </FieldLabel>
+                  <SimpleGrid columns={{ base: 2, md: 4 }} gap={3}>
+                    {daysOfWeek.map((day) => {
+                      const isSelected = (formData.selected_days || []).includes(day.value)
+                      const canSelect = (formData.selected_days || []).length < formData.days_per_week
+                      return (
+                        <Box
+                          key={day.value}
+                          as="label"
+                          display="flex"
+                          alignItems="center"
+                          gap={2}
+                          p={3}
+                          borderRadius="md"
+                          bg={isSelected ? 'blue.800' : 'gray.600'}
+                          borderWidth="1px"
+                          borderColor={isSelected ? 'blue.500' : 'gray.500'}
+                          cursor={!isSelected && !canSelect ? 'not-allowed' : 'pointer'}
+                          opacity={!isSelected && !canSelect ? 0.5 : 1}
+                          _hover={
+                            !isSelected && !canSelect
+                              ? {}
+                              : {
+                                  bg: isSelected ? 'blue.700' : 'gray.500',
+                                  borderColor: isSelected ? 'blue.400' : 'gray.400',
+                                }
+                          }
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleDayToggle(day.value)}
+                            disabled={!isSelected && !canSelect}
+                            style={{
+                              width: '18px',
+                              height: '18px',
+                              cursor: !isSelected && !canSelect ? 'not-allowed' : 'pointer',
+                            }}
+                          />
+                          <Text color="gray.50" fontSize="sm" fontWeight={isSelected ? 'medium' : 'normal'}>
+                            {day.label}
+                          </Text>
+                        </Box>
+                      )
+                    })}
+                  </SimpleGrid>
+                  <Text fontSize="sm" color="gray.400" mt={2}>
+                    Selecione exatamente {formData.days_per_week} dia(s) da semana
+                  </Text>
+                </FieldRoot>
+              )}
 
               <FieldRoot>
                 <FieldLabel color="gray.300" fontWeight="medium" mb={2}>
@@ -460,6 +575,18 @@ export default function AutomationSettings({ userId }: { userId: string }) {
                       </Text>{' '}
                       {automation.days_per_week}
                     </Text>
+                    {automation.selected_days && automation.selected_days.length > 0 && (
+                      <Text fontSize="sm" color="gray.400" mb={1}>
+                        <Text as="span" fontWeight="medium" color="gray.300">
+                          Dias selecionados:
+                        </Text>{' '}
+                        {automation.selected_days
+                          .sort((a, b) => a - b)
+                          .map((d) => daysOfWeek.find((day) => day.value === d)?.label)
+                          .filter(Boolean)
+                          .join(', ')}
+                      </Text>
+                    )}
                     <Text fontSize="sm" color="gray.400" mb={4}>
                       <Text as="span" fontWeight="medium" color="gray.300">
                         Frequência:
@@ -471,19 +598,25 @@ export default function AutomationSettings({ userId }: { userId: string }) {
                     <HStack gap={2}>
                       <Button
                         onClick={() => handleEdit(automation)}
-                        variant="outline"
+                        variant="solid"
                         colorPalette="blue"
                         size="sm"
                         flex={1}
+                        bg="blue.600"
+                        color="blue.50"
+                        _hover={{ bg: 'blue.500' }}
                       >
                         Editar
                       </Button>
                       <Button
                         onClick={() => handleDelete(automation.id)}
-                        variant="ghost"
+                        variant="solid"
                         colorPalette="red"
                         size="sm"
                         flex={1}
+                        bg="red.600"
+                        color="red.50"
+                        _hover={{ bg: 'red.500' }}
                       >
                         Excluir
                       </Button>

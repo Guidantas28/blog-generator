@@ -3,9 +3,12 @@ import { getServerClient } from '@/lib/supabase-server'
 import {
   createWordPressPost,
   uploadImageToWordPress,
+  getOrCreateCategory,
   type WordPressPost,
 } from '@/lib/wordpress'
 import { downloadImage } from '@/lib/images'
+
+export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
@@ -77,6 +80,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Buscar ou criar categoria padrão
+    let categoryId: number | undefined
+    try {
+      // Usar a primeira keyword como categoria, ou "Blog" como padrão
+      const categoryName = focusKeyword || keywords?.[0] || 'Blog'
+      categoryId = await getOrCreateCategory(site, categoryName)
+    } catch (error) {
+      console.warn('Erro ao criar/buscar categoria, continuando sem categoria:', error)
+      // Continuar sem categoria se houver erro
+    }
+
     // Preparar post com SEO
     const post: WordPressPost = {
       title,
@@ -84,6 +98,7 @@ export async function POST(request: NextRequest) {
       excerpt,
       featured_media: featuredMediaId,
       status: 'publish',
+      categories: categoryId ? [categoryId] : undefined,
       meta: {
         _yoast_wpseo_title: seoTitle || title,
         _yoast_wpseo_metadesc: seoDescription || excerpt || '',

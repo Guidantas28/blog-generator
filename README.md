@@ -33,7 +33,6 @@ UNSPLASH_ACCESS_KEY=sua_chave_do_unsplash
 PEXELS_API_KEY=sua_chave_do_pexels
 ```
 
-
 ## Tecnologias Utilizadas
 
 - **Next.js 14** - Framework React

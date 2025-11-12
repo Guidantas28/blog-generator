@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import axios from 'axios'
 import {
   Box,
@@ -19,11 +19,15 @@ import {
   Image,
   SimpleGrid,
 } from '@chakra-ui/react'
+import { useToastContext } from '@/contexts/ToastContext'
 
 interface Site {
   id: string
   name: string
   url: string
+  cta_text?: string
+  cta_link?: string
+  phone_number?: string
 }
 
 interface GeneratedContent {
@@ -53,18 +57,45 @@ export default function AutoContentGenerator({
   const [error, setError] = useState<string | null>(null)
   const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null)
   const [postLink, setPostLink] = useState<string | null>(null)
+  const [ctaText, setCtaText] = useState<string>('')
+  const [ctaLink, setCtaLink] = useState<string>('')
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [isSearchingImage, setIsSearchingImage] = useState(false)
+  const [imageKey, setImageKey] = useState(0)
+  const toast = useToastContext()
+
+  // Atualizar CTA quando o site selecionado mudar
+  useEffect(() => {
+    if (selectedSiteId) {
+      const selectedSite = sites.find((s) => s.id === selectedSiteId)
+      if (selectedSite) {
+        setCtaText(selectedSite.cta_text || '')
+        setCtaLink(selectedSite.cta_link || '')
+      }
+    } else {
+      setCtaText('')
+      setCtaLink('')
+    }
+  }, [selectedSiteId, sites])
 
   const handleGenerate = async () => {
     if (!selectedSiteId) {
-      setError('Por favor, selecione um site')
+      toast.warning('Site não selecionado', 'Por favor, selecione um site')
       return
     }
 
+    if (isGenerating) {
+      toast.info('Aguarde', 'Já existe uma geração em andamento')
+      return
+    }
+
+    setIsGenerating(true)
     setLoading(true)
     setLoadingMessage('Carregando configurações...')
     setError(null)
     setGeneratedContent(null)
     setPostLink(null)
+    toast.info('Iniciando geração automática', 'Aguarde enquanto processamos...')
 
     try {
       // 1. Buscar configurações de automação para o site selecionado
@@ -74,9 +105,9 @@ export default function AutoContentGenerator({
       )
       
       if (!settingsResponse.data || !settingsResponse.data.business_category) {
-        setError(
-          `Por favor, configure a automação para este site primeiro na aba "Automação".`
-        )
+        const errorMsg = 'Por favor, configure a automação para este site primeiro na aba "Automação".'
+        setError(errorMsg)
+        toast.error('Configuração necessária', errorMsg)
         return
       }
 
@@ -84,6 +115,9 @@ export default function AutoContentGenerator({
 
       // 2. Gerar conteúdo automático
       setLoadingMessage('Pesquisando tendências do mercado...')
+      toast.info('Pesquisando tendências', 'Analisando o mercado...')
+      
+      setLoadingMessage('Gerando conteúdo...')
       const contentResponse = await axios.post('/api/generate-automated-content', {
         siteId: selectedSiteId,
         businessCategory,
@@ -94,24 +128,33 @@ export default function AutoContentGenerator({
       }
 
       setGeneratedContent(contentResponse.data)
+      toast.success('Conteúdo gerado!', 'Conteúdo automático gerado com sucesso')
     } catch (error: any) {
       console.error('Erro ao gerar conteúdo automático:', error)
-      setError(
-        error.response?.data?.error ||
-          error.message ||
-          'Erro ao gerar conteúdo automático'
-      )
+      const errorMsg = error.response?.data?.error || error.message || 'Erro ao gerar conteúdo automático'
+      setError(errorMsg)
+      toast.error('Erro ao gerar conteúdo', errorMsg)
     } finally {
+      setIsGenerating(false)
       setLoading(false)
       setLoadingMessage('')
     }
   }
 
   const handlePublish = async () => {
-    if (!selectedSiteId || !generatedContent) return
+    if (!selectedSiteId || !generatedContent) {
+      toast.warning('Dados incompletos', 'Conteúdo ou site não selecionado')
+      return
+    }
+
+    if (publishing) {
+      toast.info('Aguarde', 'Já existe uma publicação em andamento')
+      return
+    }
 
     setPublishing(true)
     setError(null)
+    toast.info('Publicando', 'Enviando post para o WordPress...')
 
     try {
       const response = await axios.post('/api/publish-post', {
@@ -125,23 +168,37 @@ export default function AutoContentGenerator({
         seoTitle: generatedContent.title,
         seoDescription: generatedContent.excerpt,
         focusKeyword: generatedContent.keywords[0] || '',
+        ctaText: ctaText || undefined,
+        ctaLink: ctaLink || undefined,
       })
 
       setPostLink(response.data.link)
       setGeneratedContent(null)
+      toast.success('Post publicado!', 'Post publicado com sucesso no WordPress')
     } catch (error: any) {
       console.error('Erro ao publicar:', error)
-      setError('Erro ao publicar post: ' + (error.response?.data?.error || error.message))
+      const errorMsg = 'Erro ao publicar post: ' + (error.response?.data?.error || error.message)
+      setError(errorMsg)
+      toast.error('Erro ao publicar', errorMsg)
     } finally {
       setPublishing(false)
     }
   }
 
   const handleSaveDraft = async () => {
-    if (!selectedSiteId || !generatedContent) return
+    if (!selectedSiteId || !generatedContent) {
+      toast.warning('Dados incompletos', 'Conteúdo ou site não selecionado')
+      return
+    }
+
+    if (saving) {
+      toast.info('Aguarde', 'Já existe um salvamento em andamento')
+      return
+    }
 
     setSaving(true)
     setError(null)
+    toast.info('Salvando rascunho', 'Salvando post como rascunho no WordPress...')
 
     try {
       const response = await axios.post('/api/save-draft', {
@@ -157,19 +214,93 @@ export default function AutoContentGenerator({
 
       setPostLink(response.data.link)
       setGeneratedContent(null)
+      toast.success('Rascunho salvo!', 'Post salvo como rascunho no WordPress')
     } catch (error: any) {
       console.error('Erro ao salvar rascunho:', error)
-      setError('Erro ao salvar rascunho: ' + (error.response?.data?.error || error.message))
+      const errorMsg = 'Erro ao salvar rascunho: ' + (error.response?.data?.error || error.message)
+      setError(errorMsg)
+      toast.error('Erro ao salvar rascunho', errorMsg)
     } finally {
       setSaving(false)
     }
   }
 
+  const handleSearchNewImage = async () => {
+    if (!generatedContent) {
+      toast.warning('Sem conteúdo', 'Nenhum conteúdo gerado para buscar imagem')
+      return
+    }
+
+    if (isSearchingImage) {
+      toast.info('Aguarde', 'Já existe uma busca de imagem em andamento')
+      return
+    }
+
+    setIsSearchingImage(true)
+    toast.info('Buscando imagem', 'Procurando uma nova imagem...')
+
+    try {
+      const response = await axios.post('/api/search-images', {
+        query: generatedContent.topic || generatedContent.title,
+      })
+
+      console.log('Resposta da API de imagens:', response.data)
+
+      // Verificar diferentes formatos de resposta
+      let newImageUrl: string | null = null
+      
+      if (response.data.images && Array.isArray(response.data.images) && response.data.images.length > 0) {
+        // Se for array de objetos com propriedade url
+        if (typeof response.data.images[0] === 'object' && response.data.images[0].url) {
+          newImageUrl = response.data.images[0].url
+        } 
+        // Se for array de strings (URLs diretas)
+        else if (typeof response.data.images[0] === 'string') {
+          newImageUrl = response.data.images[0]
+        }
+      } 
+      // Se a resposta for uma string direta
+      else if (typeof response.data === 'string') {
+        newImageUrl = response.data
+      }
+      // Se a resposta tiver uma propriedade imageUrl
+      else if (response.data.imageUrl) {
+        newImageUrl = response.data.imageUrl
+      }
+
+      if (newImageUrl) {
+        // Forçar atualização do estado criando um novo objeto
+        setGeneratedContent((prev) => {
+          if (!prev) return null
+          return {
+            ...prev,
+            imageUrl: newImageUrl,
+          }
+        })
+        // Atualizar a key para forçar re-renderização da imagem
+        setImageKey((prev) => prev + 1)
+        toast.success('Nova imagem encontrada!', 'Imagem atualizada com sucesso')
+      } else {
+        toast.warning('Nenhuma imagem encontrada', 'Tente novamente ou continue com a imagem atual')
+      }
+    } catch (error: any) {
+      console.error('Erro ao buscar nova imagem:', error)
+      toast.error('Erro ao buscar imagem', error.response?.data?.error || error.message || 'Erro ao buscar nova imagem')
+    } finally {
+      setIsSearchingImage(false)
+    }
+  }
+
   const handleReset = () => {
+    if (isGenerating || publishing || saving) {
+      toast.info('Aguarde', 'Operação em andamento, aguarde a conclusão')
+      return
+    }
     setGeneratedContent(null)
     setPostLink(null)
     setError(null)
     setSelectedSiteId('')
+    toast.info('Resetado', 'Pronto para gerar novo conteúdo')
   }
 
   if (sites.length === 0) {
@@ -246,23 +377,33 @@ export default function AutoContentGenerator({
               </AlertRoot>
             )}
 
+            {isGenerating && (
+              <Box mb={4} p={4} bg="gray.700" borderRadius="md" borderWidth="1px" borderColor="gray.600">
+                <HStack gap={3} align="center">
+                  <Spinner size="sm" color="blue.500" />
+                  <Text fontSize="sm" color="gray.300" fontWeight="medium">
+                    {loadingMessage || 'Processando...'}
+                  </Text>
+                </HStack>
+              </Box>
+            )}
             <Button
               onClick={handleGenerate}
-              disabled={!selectedSiteId || loading}
+              disabled={!selectedSiteId || isGenerating}
               colorPalette="blue"
               size="lg"
               width="full"
               height="50px"
               fontSize="md"
               fontWeight="semibold"
-              loading={loading}
+              loading={isGenerating}
               loadingText={loadingMessage || 'Gerando...'}
               boxShadow="md"
-              _hover={{ transform: 'translateY(-1px)', boxShadow: 'lg' }}
-              _active={{ transform: 'translateY(0)' }}
+              _hover={isGenerating ? {} : { transform: 'translateY(-1px)', boxShadow: 'lg' }}
+              _active={isGenerating ? {} : { transform: 'translateY(0)' }}
               transition="all 0.2s"
             >
-              Gerar Conteúdo Automático
+              {isGenerating ? 'Gerando...' : 'Gerar Conteúdo Automático'}
             </Button>
           </VStack>
         )}
@@ -278,8 +419,9 @@ export default function AutoContentGenerator({
                 variant="ghost"
                 colorPalette="gray"
                 size="sm"
+                disabled={isGenerating || publishing || saving}
               >
-                Gerar Novo
+                {isGenerating ? 'Gerando...' : 'Gerar Novo'}
               </Button>
             </HStack>
 
@@ -293,13 +435,31 @@ export default function AutoContentGenerator({
             {generatedContent.imageUrl && (
               <Box>
                 <Image
+                  key={`${generatedContent.imageUrl}-${imageKey}`}
                   src={generatedContent.imageUrl}
                   alt={generatedContent.title}
                   borderRadius="lg"
                   maxH="400px"
                   w="full"
                   objectFit="cover"
+                  mb={3}
+                  onError={(e) => {
+                    console.error('Erro ao carregar imagem:', generatedContent.imageUrl)
+                    toast.error('Erro ao carregar imagem', 'A imagem não pôde ser carregada')
+                  }}
                 />
+                <Button
+                  onClick={handleSearchNewImage}
+                  disabled={isSearchingImage || publishing || saving}
+                  variant="outline"
+                  colorPalette="blue"
+                  size="sm"
+                  w="full"
+                  loading={isSearchingImage}
+                  loadingText="Buscando..."
+                >
+                  Selecionar Outra Imagem
+                </Button>
               </Box>
             )}
 
@@ -345,7 +505,7 @@ export default function AutoContentGenerator({
             <HStack gap={4}>
               <Button
                 onClick={handleSaveDraft}
-                disabled={publishing || saving}
+                disabled={publishing || saving || isSearchingImage}
                 variant="outline"
                 colorPalette="gray"
                 flex={1}
@@ -356,7 +516,7 @@ export default function AutoContentGenerator({
               </Button>
               <Button
                 onClick={handlePublish}
-                disabled={publishing || saving}
+                disabled={publishing || saving || isSearchingImage}
                 colorPalette="green"
                 flex={1}
                 loading={publishing}

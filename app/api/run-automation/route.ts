@@ -6,9 +6,13 @@ import { searchImages } from '@/lib/images'
 import {
   createWordPressPost,
   uploadImageToWordPress,
+  getOrCreateCategory,
   type WordPressPost,
 } from '@/lib/wordpress'
+import { filterDuplicateTrends, checkDuplicateTopic } from '@/lib/duplicate-check'
 import { downloadImage } from '@/lib/images'
+
+export const dynamic = 'force-dynamic'
 
 /**
  * API para executar automações pendentes
@@ -146,14 +150,47 @@ export async function GET(request: NextRequest) {
             throw new Error('Não foi possível encontrar tendências')
           }
 
-          // 3. Selecionar tendência aleatória
-          const selectedTrend = trends[Math.floor(Math.random() * trends.length)]
+          // 3. Filtrar tendências que já foram usadas (verificar duplicatas)
+          const filteredTrends = await filterDuplicateTrends(supabase, automation.site_id, trends)
+          const trendsToUse = filteredTrends.length > 0 ? filteredTrends : trends
+          if (filteredTrends.length === 0 && trends.length > 0) {
+            console.warn('Todas as tendências são similares a posts anteriores. Usando tendências originais.')
+          }
 
-          // 4. Gerar palavras-chave
+          // 4. Selecionar uma tendência aleatória e verificar duplicatas
+          let selectedTrend = trendsToUse[Math.floor(Math.random() * trendsToUse.length)]
+          let attempts = 0
+          const maxAttempts = 5
+          
+          // Tentar encontrar uma tendência que não seja duplicada
+          while (attempts < maxAttempts && trendsToUse.length > 1) {
+            const { isDuplicate, similarPosts } = await checkDuplicateTopic(supabase, automation.site_id, selectedTrend)
+            
+            if (!isDuplicate) {
+              // Encontrou uma tendência única, usar ela
+              break
+            }
+            
+            // Se for duplicado, tentar outra tendência
+            if (similarPosts.length > 0) {
+              console.warn(`Tendência "${selectedTrend}" é similar a posts anteriores. Tentando outra...`)
+              const alternativeTrends = trendsToUse.filter(t => t !== selectedTrend)
+              if (alternativeTrends.length > 0) {
+                selectedTrend = alternativeTrends[Math.floor(Math.random() * alternativeTrends.length)]
+              } else {
+                // Não há mais alternativas, usar a atual mesmo sendo duplicada
+                console.warn(`Aviso: Todas as tendências são similares. Usando "${selectedTrend}" mesmo assim.`)
+                break
+              }
+            }
+            attempts++
+          }
+
+          // 5. Gerar palavras-chave
           const keywords = await generateKeywords(selectedTrend)
           const keywordsArray = Array.isArray(keywords) ? keywords : []
 
-          // 5. Gerar conteúdo
+          // 6. Gerar conteúdo
           const content = await generateBlogContent(
             selectedTrend,
             keywordsArray,
@@ -161,12 +198,23 @@ export async function GET(request: NextRequest) {
             undefined
           )
 
-          // 6. Selecionar imagem
+          // 7. Verificar duplicata no título gerado também
+          const { isDuplicate: isTitleDuplicate } = await checkDuplicateTopic(
+            supabase,
+            automation.site_id,
+            selectedTrend,
+            content.title
+          )
+          if (isTitleDuplicate) {
+            console.warn(`Aviso: Título gerado "${content.title}" é similar a posts anteriores.`)
+          }
+
+          // 8. Selecionar imagem
           const imageQuery = await selectBestImageTopic(selectedTrend)
           const images = await searchImages(imageQuery, 5)
           const selectedImage = images.length > 0 ? images[0] : null
 
-          // 7. Fazer upload da imagem se houver
+          // 9. Fazer upload da imagem se houver
           let featuredMediaId: number | undefined
           if (selectedImage) {
             try {
@@ -178,13 +226,25 @@ export async function GET(request: NextRequest) {
             }
           }
 
-          // 8. Criar post como rascunho no WordPress
+          // 10. Buscar ou criar categoria padrão
+          let categoryId: number | undefined
+          try {
+            // Usar a categoria do negócio ou primeira keyword como categoria
+            const categoryName = automation.business_category || keywordsArray[0] || 'Blog'
+            categoryId = await getOrCreateCategory(site, categoryName)
+          } catch (error) {
+            console.warn('Erro ao criar/buscar categoria, continuando sem categoria:', error)
+            // Continuar sem categoria se houver erro
+          }
+
+          // 11. Criar post como rascunho no WordPress
           const post: WordPressPost = {
             title: content.title,
             content: content.content,
             excerpt: content.excerpt,
             featured_media: featuredMediaId,
             status: 'draft', // Sempre salvar como rascunho para revisão
+            categories: categoryId ? [categoryId] : undefined,
             meta: {
               _yoast_wpseo_title: content.title,
               _yoast_wpseo_metadesc: content.excerpt || '',
@@ -194,7 +254,7 @@ export async function GET(request: NextRequest) {
 
           const result = await createWordPressPost(site, post)
 
-          // 9. Salvar no Supabase
+          // 10. Salvar no Supabase
           const { data: postData, error: postError } = await supabase
             .from('automated_posts')
             .insert({

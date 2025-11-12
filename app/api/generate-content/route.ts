@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { generateBlogContent } from '@/lib/openai'
 import { getServerClient } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await getServerClient()

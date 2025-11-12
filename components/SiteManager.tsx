@@ -27,21 +27,28 @@ interface WordPressSite {
   url: string
   username: string
   password: string
+  cta_text?: string
+  cta_link?: string
+  phone_number?: string
 }
 
 interface SiteManagerProps {
-  sites: Array<{ id: string; name: string; url: string; username: string }>
+  sites: Array<{ id: string; name: string; url: string; username: string; cta_text?: string; cta_link?: string; phone_number?: string }>
   onSitesChange: () => void
   userId: string
 }
 
 export default function SiteManager({ sites, onSitesChange, userId }: SiteManagerProps) {
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<WordPressSite>({
     name: '',
     url: '',
     username: '',
     password: '',
+    cta_text: '',
+    cta_link: '',
+    phone_number: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -61,26 +68,71 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
     }
 
     try {
-      const passwordEncrypted = btoa(formData.password)
-
-      const { error } = await supabase.from('wordpress_sites').insert({
-        user_id: userId,
+      const siteData: any = {
         name: formData.name,
         url: formData.url.replace(/\/$/, ''),
         username: formData.username,
-        password_encrypted: passwordEncrypted,
-      })
+        cta_text: formData.cta_text?.trim() || null,
+        cta_link: formData.cta_link?.trim() || null,
+        phone_number: formData.phone_number?.trim() || null,
+      }
 
-      if (error) throw error
+      // Só atualizar senha se foi fornecida (ou se for criação)
+      if (!editingId || formData.password.trim()) {
+        siteData.password_encrypted = btoa(formData.password)
+      }
 
-      setFormData({ name: '', url: '', username: '', password: '' })
+      if (editingId) {
+        // Atualizar site existente
+        const { error } = await supabase
+          .from('wordpress_sites')
+          .update(siteData)
+          .eq('id', editingId)
+          .eq('user_id', userId)
+
+        if (error) throw error
+      } else {
+        // Criar novo site
+        const { error } = await supabase.from('wordpress_sites').insert({
+          user_id: userId,
+          ...siteData,
+        })
+
+        if (error) throw error
+      }
+
+      setFormData({ name: '', url: '', username: '', password: '', cta_text: '', cta_link: '', phone_number: '' })
       setShowForm(false)
+      setEditingId(null)
       onSitesChange()
     } catch (err: any) {
-      setError(err.message || 'Erro ao cadastrar site')
+      setError(err.message || 'Erro ao salvar site')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleEdit = async (site: { id: string; name: string; url: string; username: string; cta_text?: string; cta_link?: string; phone_number?: string }) => {
+    // Buscar a senha não é possível (está encriptada), então deixamos vazio
+    setFormData({
+      name: site.name,
+      url: site.url,
+      username: site.username,
+      password: '', // Senha não será exibida por segurança
+      cta_text: site.cta_text || '',
+      cta_link: site.cta_link || '',
+      phone_number: site.phone_number || '',
+    })
+    setEditingId(site.id)
+    setShowForm(true)
+    setError(null)
+  }
+
+  const handleCancel = () => {
+    setFormData({ name: '', url: '', username: '', password: '', cta_text: '', cta_link: '', phone_number: '' })
+    setShowForm(false)
+    setEditingId(null)
+    setError(null)
   }
 
   const handleDelete = async (id: string) => {
@@ -113,9 +165,12 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
           <Heading size="lg" color="gray.50">
             Meus Sites WordPress
           </Heading>
-          {canAddSite && (
+          {canAddSite && !editingId && (
             <Button
-              onClick={() => setShowForm(!showForm)}
+              onClick={() => {
+                setShowForm(!showForm)
+                if (showForm) handleCancel()
+              }}
               colorPalette="blue"
               size="md"
             >
@@ -133,6 +188,9 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
 
         {showForm && (
           <Box bg="gray.700" p={6} borderRadius="lg" shadow="md" mb={6}>
+            <Heading size="md" color="gray.50" mb={4}>
+              {editingId ? 'Editar Site' : 'Adicionar Novo Site'}
+            </Heading>
             <form onSubmit={handleSubmit}>
               <VStack gap={4} align="stretch">
                 <FieldRoot required>
@@ -147,6 +205,9 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
                     bg="gray.600"
                     borderColor="gray.500"
                     color="gray.50"
+                    size="lg"
+                    px={4}
+                    py={3}
                     _placeholder={{ color: 'gray.400' }}
                     _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
                   />
@@ -164,6 +225,9 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
                     bg="gray.600"
                     borderColor="gray.500"
                     color="gray.50"
+                    size="lg"
+                    px={4}
+                    py={3}
                     _placeholder={{ color: 'gray.400' }}
                     _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
                   />
@@ -181,12 +245,15 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
                     bg="gray.600"
                     borderColor="gray.500"
                     color="gray.50"
+                    size="lg"
+                    px={4}
+                    py={3}
                     _placeholder={{ color: 'gray.400' }}
                     _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
                   />
                 </FieldRoot>
 
-                <FieldRoot required>
+                <FieldRoot required={!editingId}>
                   <FieldLabel color="gray.300" fontWeight="medium">
                     Senha (Application Password)
                   </FieldLabel>
@@ -194,15 +261,90 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
                     type="password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="Use Application Password do WordPress"
+                    placeholder={editingId ? "Deixe em branco para manter a senha atual" : "Use Application Password do WordPress"}
                     bg="gray.600"
                     borderColor="gray.500"
                     color="gray.50"
+                    size="lg"
+                    px={4}
+                    py={3}
                     _placeholder={{ color: 'gray.400' }}
                     _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
                   />
                   <Text fontSize="xs" color="gray.400" mt={1}>
-                    Crie uma Application Password em: Usuários → Seu Perfil → Application Passwords
+                    {editingId 
+                      ? "Deixe em branco para manter a senha atual. Preencha apenas se desejar alterar."
+                      : "Crie uma Application Password em: Usuários → Seu Perfil → Application Passwords"
+                    }
+                  </Text>
+                </FieldRoot>
+
+                <FieldRoot>
+                  <FieldLabel color="gray.300" fontWeight="medium">
+                    CTA - Texto (opcional)
+                  </FieldLabel>
+                  <Input
+                    type="text"
+                    value={formData.cta_text || ''}
+                    onChange={(e) => setFormData({ ...formData, cta_text: e.target.value })}
+                    placeholder="Ex: Quer saber mais? Entre em contato conosco!"
+                    bg="gray.600"
+                    borderColor="gray.500"
+                    color="gray.50"
+                    size="lg"
+                    px={4}
+                    py={3}
+                    _placeholder={{ color: 'gray.400' }}
+                    _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
+                  />
+                  <Text fontSize="xs" color="gray.400" mt={1}>
+                    Texto do Call to Action que será usado nos posts deste site
+                  </Text>
+                </FieldRoot>
+
+                <FieldRoot>
+                  <FieldLabel color="gray.300" fontWeight="medium">
+                    CTA - Link do WhatsApp (opcional)
+                  </FieldLabel>
+                  <Input
+                    type="url"
+                    value={formData.cta_link || ''}
+                    onChange={(e) => setFormData({ ...formData, cta_link: e.target.value })}
+                    placeholder="https://wa.me/5511999999999"
+                    bg="gray.600"
+                    borderColor="gray.500"
+                    color="gray.50"
+                    size="lg"
+                    px={4}
+                    py={3}
+                    _placeholder={{ color: 'gray.400' }}
+                    _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
+                  />
+                  <Text fontSize="xs" color="gray.400" mt={1}>
+                    Link do WhatsApp que será usado nos posts deste site
+                  </Text>
+                </FieldRoot>
+
+                <FieldRoot>
+                  <FieldLabel color="gray.300" fontWeight="medium">
+                    Número de Telefone (opcional)
+                  </FieldLabel>
+                  <Input
+                    type="tel"
+                    value={formData.phone_number || ''}
+                    onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
+                    placeholder="5511999999999"
+                    bg="gray.600"
+                    borderColor="gray.500"
+                    color="gray.50"
+                    size="lg"
+                    px={4}
+                    py={3}
+                    _placeholder={{ color: 'gray.400' }}
+                    _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
+                  />
+                  <Text fontSize="xs" color="gray.400" mt={1}>
+                    Número de telefone do WhatsApp (apenas números, com código do país)
                   </Text>
                 </FieldRoot>
 
@@ -213,17 +355,28 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
                   </AlertRoot>
                 )}
 
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  colorPalette="blue"
-                  width="full"
-                  size="lg"
-                  loading={loading}
-                  loadingText="Salvando..."
-                >
-                  Salvar Site
-                </Button>
+                <HStack gap={4}>
+                  <Button
+                    type="button"
+                    onClick={handleCancel}
+                    variant="outline"
+                    colorPalette="gray"
+                    flex={1}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    colorPalette="blue"
+                    flex={1}
+                    size="lg"
+                    loading={loading}
+                    loadingText="Salvando..."
+                  >
+                    {editingId ? 'Atualizar Site' : 'Salvar Site'}
+                  </Button>
+                </HStack>
               </VStack>
             </form>
           </Box>
@@ -263,14 +416,32 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
                     </Text>{' '}
                     {site.username}
                   </Text>
-                  <Button
-                    onClick={() => handleDelete(site.id)}
-                    variant="ghost"
-                    colorPalette="red"
-                    size="sm"
-                  >
-                    Remover
-                  </Button>
+                  <HStack gap={2}>
+                    <Button
+                      onClick={() => handleEdit(site)}
+                      variant="solid"
+                      colorPalette="blue"
+                      size="sm"
+                      flex={1}
+                      bg="blue.600"
+                      color="blue.50"
+                      _hover={{ bg: 'blue.500' }}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      onClick={() => handleDelete(site.id)}
+                      variant="solid"
+                      colorPalette="red"
+                      size="sm"
+                      flex={1}
+                      bg="red.600"
+                      color="red.50"
+                      _hover={{ bg: 'red.500' }}
+                    >
+                      Remover
+                    </Button>
+                  </HStack>
                 </CardBody>
               </CardRoot>
             ))}

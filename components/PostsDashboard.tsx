@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
+import axios from 'axios'
 import {
   Box,
   Heading,
@@ -18,6 +19,9 @@ import {
   Text,
   VStack,
   HStack,
+  AlertRoot,
+  AlertIndicator,
+  AlertContent,
 } from '@chakra-ui/react'
 
 interface PublishedPost {
@@ -36,6 +40,8 @@ interface PublishedPost {
 export default function PostsDashboard({ userId }: { userId: string }) {
   const [posts, setPosts] = useState<PublishedPost[]>([])
   const [loading, setLoading] = useState(true)
+  const [refazendoId, setRefazendoId] = useState<string | null>(null)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -90,6 +96,67 @@ export default function PostsDashboard({ userId }: { userId: string }) {
     }
   }
 
+  const handleRefazer = async (post: PublishedPost) => {
+    if (!confirm('Deseja regenerar e republicar este post? O conteúdo será completamente novo.')) return
+
+    setRefazendoId(post.id)
+    setMessage(null)
+
+    try {
+      // 1. Gerar novo conteúdo
+      const contentResponse = await axios.post('/api/generate-keywords-and-content', {
+        topic: post.topic || post.title,
+      })
+
+      if (!contentResponse.data || !contentResponse.data.content) {
+        throw new Error('Erro ao gerar novo conteúdo')
+      }
+
+      const { title, content, excerpt, keywords } = contentResponse.data
+
+      // 2. Buscar nova imagem
+      let imageUrl = null
+      try {
+        const imageResponse = await axios.post('/api/search-images', {
+          query: post.topic || post.title,
+        })
+        if (imageResponse.data.images && imageResponse.data.images.length > 0) {
+          imageUrl = imageResponse.data.images[0].url
+        }
+      } catch (error) {
+        console.warn('Erro ao buscar imagem, continuando sem imagem:', error)
+      }
+
+      // 3. Publicar novo post
+      const publishResponse = await axios.post('/api/publish-post', {
+        siteId: post.site_id,
+        topic: post.topic || title,
+        title,
+        content,
+        excerpt: excerpt || '',
+        imageUrl,
+        keywords: Array.isArray(keywords) ? keywords : [],
+        seoTitle: title,
+        seoDescription: excerpt || '',
+        focusKeyword: Array.isArray(keywords) && keywords.length > 0 ? keywords[0] : '',
+      })
+
+      setMessage({
+        type: 'success',
+        text: `Post refeito e publicado com sucesso! ${publishResponse.data.link ? `Link: ${publishResponse.data.link}` : ''}`,
+      })
+      loadPosts()
+    } catch (error: any) {
+      console.error('Erro ao refazer post:', error)
+      setMessage({
+        type: 'error',
+        text: 'Erro ao refazer post: ' + (error.response?.data?.error || error.message),
+      })
+    } finally {
+      setRefazendoId(null)
+    }
+  }
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" py={8}>
@@ -101,6 +168,18 @@ export default function PostsDashboard({ userId }: { userId: string }) {
   return (
     <VStack gap={6} align="stretch" px={4} py={6}>
       <Heading size="lg" color="gray.50">Posts Publicados</Heading>
+
+      {message && (
+        <AlertRoot
+          status={message.type}
+          borderRadius="md"
+          bg={message.type === 'success' ? 'green.900' : 'red.900'}
+          color={message.type === 'success' ? 'green.100' : 'red.100'}
+        >
+          <AlertIndicator />
+          <AlertContent>{message.text}</AlertContent>
+        </AlertRoot>
+      )}
 
       {posts.length === 0 ? (
         <Box p={8} textAlign="center" bg="gray.800" borderRadius="lg" shadow="sm" borderWidth="1px" borderColor="gray.700">
@@ -140,16 +219,11 @@ export default function PostsDashboard({ userId }: { userId: string }) {
                   </TableCell>
                   <TableCell py={4} px={4}>
                     <HStack gap={1} flexWrap="wrap">
-                      {post.keywords?.slice(0, 3).map((keyword, idx) => (
+                      {post.keywords?.map((keyword, idx) => (
                         <Badge key={idx} colorPalette="blue" fontSize="xs" color="blue.100" bg="blue.800">
                           {keyword}
                         </Badge>
                       ))}
-                      {post.keywords?.length > 3 && (
-                        <Badge colorPalette="gray" fontSize="xs" color="gray.200" bg="gray.600">
-                          +{post.keywords.length - 3}
-                        </Badge>
-                      )}
                     </HStack>
                   </TableCell>
                   <TableCell py={4} px={4}>
@@ -167,7 +241,7 @@ export default function PostsDashboard({ userId }: { userId: string }) {
                     </Badge>
                   </TableCell>
                   <TableCell py={4} px={4}>
-                    <HStack gap={2}>
+                    <HStack gap={2} flexWrap="wrap">
                       {post.wordpress_post_url && (
                         <Button
                           asChild
@@ -176,7 +250,10 @@ export default function PostsDashboard({ userId }: { userId: string }) {
                           variant="outline"
                           borderColor="blue.500"
                           color="blue.200"
-                          _hover={{ bg: 'blue.800', borderColor: 'blue.400' }}
+                          px={4}
+                          py={2}
+                          _hover={{ bg: 'blue.800', borderColor: 'blue.400', transform: 'translateY(-1px)' }}
+                          transition="all 0.2s"
                         >
                           <a href={post.wordpress_post_url} target="_blank" rel="noopener noreferrer">
                             Ver Post
@@ -185,11 +262,33 @@ export default function PostsDashboard({ userId }: { userId: string }) {
                       )}
                       <Button
                         size="sm"
+                        colorPalette="purple"
+                        variant="outline"
+                        borderColor="purple.500"
+                        color="purple.200"
+                        px={4}
+                        py={2}
+                        _hover={{ bg: 'purple.800', borderColor: 'purple.400', transform: 'translateY(-1px)' }}
+                        transition="all 0.2s"
+                        onClick={() => handleRefazer(post)}
+                        loading={refazendoId === post.id}
+                        loadingText="Refazendo..."
+                        disabled={refazendoId !== null}
+                      >
+                        Refazer
+                      </Button>
+                      <Button
+                        size="sm"
                         colorPalette="red"
-                        variant="ghost"
-                        color="red.200"
-                        _hover={{ bg: 'red.800' }}
+                        variant="solid"
+                        bg="red.600"
+                        color="red.50"
+                        px={4}
+                        py={2}
+                        _hover={{ bg: 'red.500', transform: 'translateY(-1px)' }}
+                        transition="all 0.2s"
                         onClick={() => handleDelete(post.id)}
+                        disabled={refazendoId !== null}
                       >
                         Excluir
                       </Button>
