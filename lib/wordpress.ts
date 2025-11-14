@@ -199,6 +199,25 @@ async function updateWordPressPostMeta(
   }
 }
 
+export async function deleteWordPressPost(
+  site: WordPressSite,
+  postId: number
+): Promise<void> {
+  const credentials = btoa(`${site.username}:${site.password}`)
+  
+  const response = await fetch(`${site.url}/wp-json/wp/v2/posts/${postId}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Basic ${credentials}`,
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Erro ao excluir post no WordPress: ${error}`)
+  }
+}
+
 export function validateWordPressSite(url: string): boolean {
   try {
     const urlObj = new URL(url)

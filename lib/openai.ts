@@ -52,11 +52,12 @@ Formato de resposta (JSON):
 
   const response = JSON.parse(completion.choices[0].message.content || '{}')
   
-  // Processar CTA se fornecido
+  // Processar CTA se fornecido - formato botão destacado
   if (ctaText && ctaLink && response.content) {
-    const ctaHtml = `<div style="background: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 20px; margin: 30px 0; border-radius: 8px;">
-      <h3 style="margin-top: 0; color: #0369a1;">${ctaText}</h3>
-      <a href="${ctaLink}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #0ea5e9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; margin-top: 10px;">Entre em contato via WhatsApp</a>
+    const ctaHtml = `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; margin: 40px 0; border-radius: 12px; text-align: center; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);">
+      <a href="${ctaLink}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #ffffff; color: #667eea; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 18px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);">
+        ${ctaText}
+      </a>
     </div>`
     response.content = response.content.replace('[CTA]', ctaHtml).replace(/\[CTA\].*?\[\/CTA\]/s, ctaHtml)
   }

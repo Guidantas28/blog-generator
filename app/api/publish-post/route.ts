@@ -58,6 +58,10 @@ export async function POST(request: NextRequest) {
     // Decriptografar senha (em produção, use uma biblioteca adequada)
     const password = atob(siteData.password_encrypted)
 
+    // Usar CTA do site como fallback se não for passado
+    const finalCtaText = ctaText || siteData.cta_text || null
+    const finalCtaLink = ctaLink || siteData.cta_link || null
+
     const site = {
       id: siteData.id,
       user_id: siteData.user_id,
@@ -123,8 +127,8 @@ export async function POST(request: NextRequest) {
         wordpress_post_id: result.id,
         wordpress_post_url: result.link,
         image_url: imageUrl || null,
-        cta_text: ctaText || null,
-        cta_link: ctaLink || null,
+        cta_text: finalCtaText,
+        cta_link: finalCtaLink,
         seo_title: seoTitle || title,
         seo_description: seoDescription || excerpt || '',
         focus_keyword: focusKeyword || '',

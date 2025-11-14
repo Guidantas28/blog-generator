@@ -97,15 +97,31 @@ export default function PostsDashboard({ userId }: { userId: string }) {
   }
 
   const handleRefazer = async (post: PublishedPost) => {
-    if (!confirm('Deseja regenerar e republicar este post? O conteúdo será completamente novo.')) return
+    if (!confirm('Deseja regenerar e republicar este post? O post antigo será excluído e um novo será criado.')) return
 
     setRefazendoId(post.id)
     setMessage(null)
 
     try {
-      // 1. Gerar novo conteúdo
+      // 1. Buscar dados do site para obter CTA
+      const { data: siteData, error: siteError } = await supabase
+        .from('wordpress_sites')
+        .select('cta_text, cta_link')
+        .eq('id', post.site_id)
+        .single()
+
+      if (siteError) {
+        throw new Error('Erro ao buscar dados do site')
+      }
+
+      const ctaText = siteData?.cta_text || undefined
+      const ctaLink = siteData?.cta_link || undefined
+
+      // 2. Gerar novo conteúdo com CTA
       const contentResponse = await axios.post('/api/generate-keywords-and-content', {
         topic: post.topic || post.title,
+        ctaText,
+        ctaLink,
       })
 
       if (!contentResponse.data || !contentResponse.data.content) {
@@ -114,7 +130,7 @@ export default function PostsDashboard({ userId }: { userId: string }) {
 
       const { title, content, excerpt, keywords } = contentResponse.data
 
-      // 2. Buscar nova imagem
+      // 3. Buscar nova imagem (garantir que seja buscada)
       let imageUrl = null
       try {
         const imageResponse = await axios.post('/api/search-images', {
@@ -122,12 +138,39 @@ export default function PostsDashboard({ userId }: { userId: string }) {
         })
         if (imageResponse.data.images && imageResponse.data.images.length > 0) {
           imageUrl = imageResponse.data.images[0].url
+        } else {
+          throw new Error('Nenhuma imagem encontrada')
         }
-      } catch (error) {
-        console.warn('Erro ao buscar imagem, continuando sem imagem:', error)
+      } catch (error: any) {
+        // Tentar novamente com o título como query
+        try {
+          const imageResponse = await axios.post('/api/search-images', {
+            query: title,
+          })
+          if (imageResponse.data.images && imageResponse.data.images.length > 0) {
+            imageUrl = imageResponse.data.images[0].url
+          } else {
+            throw new Error('Nenhuma imagem encontrada')
+          }
+        } catch (retryError) {
+          throw new Error('Erro ao buscar imagem. Por favor, tente novamente.')
+        }
       }
 
-      // 3. Publicar novo post
+      // 4. Excluir post antigo do WordPress (se tiver wordpress_post_id)
+      if (post.wordpress_post_id) {
+        try {
+          await axios.post('/api/delete-wordpress-post', {
+            siteId: post.site_id,
+            postId: post.wordpress_post_id,
+          })
+        } catch (error: any) {
+          console.warn('Aviso: Não foi possível excluir o post antigo do WordPress:', error)
+          // Continuar mesmo se não conseguir excluir
+        }
+      }
+
+      // 5. Publicar novo post
       const publishResponse = await axios.post('/api/publish-post', {
         siteId: post.site_id,
         topic: post.topic || title,
@@ -139,7 +182,25 @@ export default function PostsDashboard({ userId }: { userId: string }) {
         seoTitle: title,
         seoDescription: excerpt || '',
         focusKeyword: Array.isArray(keywords) && keywords.length > 0 ? keywords[0] : '',
+        ctaText,
+        ctaLink,
       })
+
+      // 6. Excluir registro antigo do Supabase após criar o novo
+      if (post.id) {
+        try {
+          const { error: deleteError } = await supabase
+            .from('published_posts')
+            .delete()
+            .eq('id', post.id)
+
+          if (deleteError) {
+            console.warn('Aviso: Não foi possível excluir o registro antigo do Supabase:', deleteError)
+          }
+        } catch (error) {
+          console.warn('Aviso: Erro ao excluir registro antigo:', error)
+        }
+      }
 
       setMessage({
         type: 'success',
