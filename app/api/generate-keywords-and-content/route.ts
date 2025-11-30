@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    const { topic, ctaText, ctaLink } = await request.json()
+    const { topic, ctaText, ctaLink, phoneNumber } = await request.json()
 
     if (!topic || typeof topic !== 'string') {
       return NextResponse.json({ error: 'Tópico é obrigatório' }, { status: 400 })
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const keywordsArray = Array.isArray(keywords) ? keywords : []
 
     // Gerar conteúdo apenas uma vez com as palavras-chave
-    const finalContent = await generateBlogContent(topic, keywordsArray, ctaText, ctaLink)
+    const finalContent = await generateBlogContent(topic, keywordsArray, ctaText, ctaLink, phoneNumber)
 
     return NextResponse.json({
       keywords: keywordsArray,

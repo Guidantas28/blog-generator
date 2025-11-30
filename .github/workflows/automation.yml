@@ -1,0 +1,22 @@
+name: Run Automation
+
+on:
+  schedule:
+    # Executa diariamente às 09:00 (horário de Brasília) - 12:00 UTC
+    - cron: '0 12 * * *'
+  workflow_dispatch: # Permite execução manual
+
+jobs:
+  run-automation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Automation
+        run: |
+          curl -X GET "${{ secrets.APP_URL }}/api/run-automation" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -f || exit 1
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+

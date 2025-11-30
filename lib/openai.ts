@@ -8,7 +8,8 @@ export async function generateBlogContent(
   topic: string,
   keywords: string[],
   ctaText?: string,
-  ctaLink?: string
+  ctaLink?: string,
+  phoneNumber?: string
 ): Promise<{ title: string; content: string; excerpt: string }> {
   const keywordsText = keywords.join(', ')
   const ctaSection = ctaText && ctaLink 
@@ -53,13 +54,67 @@ Formato de resposta (JSON):
   const response = JSON.parse(completion.choices[0].message.content || '{}')
   
   // Processar CTA se fornecido - formato botão destacado
+  // Garantir que o CTA seja sempre inserido no final do conteúdo se fornecido
   if (ctaText && ctaLink && response.content) {
+    // Garantir que o link seja válido (adicionar https:// se não tiver protocolo)
+    let validCtaLink = ctaLink.trim()
+    if (!validCtaLink.startsWith('http://') && !validCtaLink.startsWith('https://')) {
+      // Se for um número de telefone (apenas dígitos), criar link do WhatsApp
+      if (/^\d+$/.test(validCtaLink.replace(/\D/g, ''))) {
+        validCtaLink = `https://wa.me/${validCtaLink.replace(/\D/g, '')}`
+      } else {
+        // Adicionar https:// por padrão
+        validCtaLink = `https://${validCtaLink}`
+      }
+    }
+    
     const ctaHtml = `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; margin: 40px 0; border-radius: 12px; text-align: center; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);">
-      <a href="${ctaLink}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #ffffff; color: #667eea; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 18px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);">
+      <a href="${validCtaLink}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #ffffff; color: #667eea; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 18px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);">
         ${ctaText}
       </a>
     </div>`
+    
+    // Primeiro, tentar substituir marcadores [CTA] se existirem
     response.content = response.content.replace('[CTA]', ctaHtml).replace(/\[CTA\].*?\[\/CTA\]/s, ctaHtml)
+    
+    // Se o CTA não foi inserido (não havia marcador), adicionar no final do conteúdo
+    if (!response.content.includes(ctaHtml)) {
+      response.content = response.content + ctaHtml
+    }
+  }
+
+  // Adicionar telefone no rodapé se fornecido
+  if (phoneNumber && response.content) {
+    // Remover caracteres não numéricos do telefone
+    const cleanPhone = phoneNumber.replace(/\D/g, '')
+    
+    if (cleanPhone.length >= 10) {
+      // Formatar telefone para exibição
+      let formattedPhone = cleanPhone
+      if (cleanPhone.length === 11) {
+        // Formato: (XX) XXXXX-XXXX
+        formattedPhone = cleanPhone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
+      } else if (cleanPhone.length === 10) {
+        // Formato: (XX) XXXX-XXXX
+        formattedPhone = cleanPhone.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')
+      } else if (cleanPhone.length >= 12) {
+        // Formato internacional: +XX (XX) XXXXX-XXXX
+        formattedPhone = cleanPhone.replace(/(\d{2})(\d{2})(\d{4,5})(\d{4})/, '+$1 ($2) $3-$4')
+      }
+      
+      const whatsappLink = `https://wa.me/${cleanPhone}`
+      
+      const phoneFooter = `<div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 8px; text-align: center; border-top: 2px solid #667eea;">
+        <p style="margin: 0; color: #333; font-size: 16px;">
+          <strong>Entre em contato:</strong><br>
+          <a href="${whatsappLink}" target="_blank" rel="noopener noreferrer" style="color: #25D366; text-decoration: none; font-weight: 600;">
+            📱 WhatsApp: ${formattedPhone}
+          </a>
+        </p>
+      </div>`
+      
+      response.content = response.content + phoneFooter
+    }
   }
 
   return {

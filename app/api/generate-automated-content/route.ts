@@ -27,16 +27,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Buscar dados do site para obter CTA
+    // Buscar dados do site para obter CTA e telefone
     const { data: siteData, error: siteError } = await supabase
       .from('wordpress_sites')
-      .select('cta_text, cta_link')
+      .select('cta_text, cta_link, phone_number')
       .eq('id', siteId)
       .eq('user_id', session.user.id)
       .single()
 
     const ctaText = siteData?.cta_text || undefined
     const ctaLink = siteData?.cta_link || undefined
+    const phoneNumber = siteData?.phone_number || undefined
 
     // 1. Pesquisar tendências do mercado
     const trends = await researchMarketTrends(businessCategory)
@@ -89,12 +90,13 @@ export async function POST(request: NextRequest) {
     const keywords = await generateKeywords(selectedTrend)
     const keywordsArray = Array.isArray(keywords) ? keywords : []
 
-    // 5. Gerar conteúdo do blog com CTA do site
+    // 5. Gerar conteúdo do blog com CTA e telefone do site
     const content = await generateBlogContent(
       selectedTrend,
       keywordsArray,
       ctaText,
-      ctaLink
+      ctaLink,
+      phoneNumber
     )
     
     // 6. Verificar duplicata no título gerado também

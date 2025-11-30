@@ -190,15 +190,21 @@ export async function GET(request: NextRequest) {
           const keywords = await generateKeywords(selectedTrend)
           const keywordsArray = Array.isArray(keywords) ? keywords : []
 
-          // 6. Gerar conteúdo
+          // 6. Obter CTA e telefone do site
+          const ctaText = siteData.cta_text || undefined
+          const ctaLink = siteData.cta_link || undefined
+          const phoneNumber = siteData.phone_number || undefined
+
+          // 7. Gerar conteúdo com CTA e telefone do site
           const content = await generateBlogContent(
             selectedTrend,
             keywordsArray,
-            undefined,
-            undefined
+            ctaText,
+            ctaLink,
+            phoneNumber
           )
 
-          // 7. Verificar duplicata no título gerado também
+          // 8. Verificar duplicata no título gerado também
           const { isDuplicate: isTitleDuplicate } = await checkDuplicateTopic(
             supabase,
             automation.site_id,
@@ -209,12 +215,12 @@ export async function GET(request: NextRequest) {
             console.warn(`Aviso: Título gerado "${content.title}" é similar a posts anteriores.`)
           }
 
-          // 8. Selecionar imagem
+          // 9. Selecionar imagem
           const imageQuery = await selectBestImageTopic(selectedTrend)
           const images = await searchImages(imageQuery, 5)
           const selectedImage = images.length > 0 ? images[0] : null
 
-          // 9. Fazer upload da imagem se houver
+          // 10. Fazer upload da imagem se houver
           let featuredMediaId: number | undefined
           if (selectedImage) {
             try {

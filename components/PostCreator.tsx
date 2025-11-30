@@ -39,6 +39,7 @@ export default function PostCreator({ sites }: { sites: Site[] }) {
   const [customKeywords, setCustomKeywords] = useState('')
   const [ctaText, setCtaText] = useState('')
   const [ctaLink, setCtaLink] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [images, setImages] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -61,17 +62,19 @@ export default function PostCreator({ sites }: { sites: Site[] }) {
   const [isSearchingImages, setIsSearchingImages] = useState(false)
   const toast = useToastContext()
 
-  // Atualizar CTA quando o site selecionado mudar
+  // Atualizar CTA e telefone quando o site selecionado mudar
   useEffect(() => {
     if (selectedSiteId) {
       const selectedSite = sites.find((s) => s.id === selectedSiteId)
       if (selectedSite) {
         setCtaText(selectedSite.cta_text || '')
         setCtaLink(selectedSite.cta_link || '')
+        setPhoneNumber(selectedSite.phone_number || '')
       }
     } else {
       setCtaText('')
       setCtaLink('')
+      setPhoneNumber('')
     }
   }, [selectedSiteId, sites])
 
@@ -102,6 +105,7 @@ export default function PostCreator({ sites }: { sites: Site[] }) {
         topic,
         ctaText: ctaText || undefined,
         ctaLink: ctaLink || undefined,
+        phoneNumber: phoneNumber || undefined,
       })
       
       if (!response.data) {
@@ -158,6 +162,7 @@ export default function PostCreator({ sites }: { sites: Site[] }) {
         keywords,
         ctaText: ctaText || undefined,
         ctaLink: ctaLink || undefined,
+        phoneNumber: phoneNumber || undefined,
       })
       
       if (response.data) {
@@ -250,6 +255,7 @@ export default function PostCreator({ sites }: { sites: Site[] }) {
         keywords,
         ctaText: ctaText || undefined,
         ctaLink: ctaLink || undefined,
+        phoneNumber: phoneNumber || undefined,
       })
       
       if (response.data) {

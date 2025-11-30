@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    const { topic, keywords, ctaText, ctaLink } = await request.json()
+    const { topic, keywords, ctaText, ctaLink, phoneNumber } = await request.json()
 
     if (!topic || !keywords || !Array.isArray(keywords)) {
       return NextResponse.json(
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const content = await generateBlogContent(topic, keywords, ctaText, ctaLink)
+    const content = await generateBlogContent(topic, keywords, ctaText, ctaLink, phoneNumber)
 
     return NextResponse.json(content)
   } catch (error: any) {

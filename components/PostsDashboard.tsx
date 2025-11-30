@@ -103,10 +103,10 @@ export default function PostsDashboard({ userId }: { userId: string }) {
     setMessage(null)
 
     try {
-      // 1. Buscar dados do site para obter CTA
+      // 1. Buscar dados do site para obter CTA e telefone
       const { data: siteData, error: siteError } = await supabase
         .from('wordpress_sites')
-        .select('cta_text, cta_link')
+        .select('cta_text, cta_link, phone_number')
         .eq('id', post.site_id)
         .single()
 
@@ -116,12 +116,14 @@ export default function PostsDashboard({ userId }: { userId: string }) {
 
       const ctaText = siteData?.cta_text || undefined
       const ctaLink = siteData?.cta_link || undefined
+      const phoneNumber = siteData?.phone_number || undefined
 
-      // 2. Gerar novo conteúdo com CTA
+      // 2. Gerar novo conteúdo com CTA e telefone
       const contentResponse = await axios.post('/api/generate-keywords-and-content', {
         topic: post.topic || post.title,
         ctaText,
         ctaLink,
+        phoneNumber,
       })
 
       if (!contentResponse.data || !contentResponse.data.content) {
@@ -130,31 +132,32 @@ export default function PostsDashboard({ userId }: { userId: string }) {
 
       const { title, content, excerpt, keywords } = contentResponse.data
 
-      // 3. Buscar nova imagem (garantir que seja buscada)
+      // 3. Buscar nova imagem (garantir que seja buscada com múltiplas tentativas)
       let imageUrl = null
-      try {
-        const imageResponse = await axios.post('/api/search-images', {
-          query: post.topic || post.title,
-        })
-        if (imageResponse.data.images && imageResponse.data.images.length > 0) {
-          imageUrl = imageResponse.data.images[0].url
-        } else {
-          throw new Error('Nenhuma imagem encontrada')
-        }
-      } catch (error: any) {
-        // Tentar novamente com o título como query
+      const imageQueries = [
+        post.topic || post.title,
+        title,
+        keywords && keywords.length > 0 ? keywords[0] : post.topic || post.title,
+        post.topic || post.title + ' blog',
+      ]
+      
+      for (const query of imageQueries) {
         try {
           const imageResponse = await axios.post('/api/search-images', {
-            query: title,
+            query: query,
           })
           if (imageResponse.data.images && imageResponse.data.images.length > 0) {
             imageUrl = imageResponse.data.images[0].url
-          } else {
-            throw new Error('Nenhuma imagem encontrada')
+            break // Imagem encontrada, sair do loop
           }
-        } catch (retryError) {
-          throw new Error('Erro ao buscar imagem. Por favor, tente novamente.')
+        } catch (error: any) {
+          console.warn(`Erro ao buscar imagem com query "${query}":`, error)
+          // Continuar para próxima tentativa
         }
+      }
+      
+      if (!imageUrl) {
+        throw new Error('Não foi possível encontrar uma imagem. Por favor, tente novamente.')
       }
 
       // 4. Excluir post antigo do WordPress (se tiver wordpress_post_id)
