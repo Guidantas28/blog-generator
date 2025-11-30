@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerClient } from '@/lib/supabase-server'
+import { getServiceRoleClient } from '@/lib/supabase-server'
 import { researchMarketTrends, selectBestImageTopic } from '@/lib/openai-trends'
 import { generateKeywords, generateBlogContent } from '@/lib/openai'
 import { searchImages } from '@/lib/images'
@@ -22,8 +22,6 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await getServerClient()
-    
     // Verificar se há uma chave secreta para proteger a rota
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET
@@ -32,14 +30,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
+    // Usar service role client para bypassar RLS (necessário para cron jobs)
+    const supabase = getServiceRoleClient()
+
     // Buscar todas as automações ativas
     const { data: automations, error: automationsError } = await supabase
       .from('automation_settings')
       .select('*')
 
     if (automationsError) {
-      throw automationsError
+      console.error('Erro ao buscar automações:', automationsError)
+      return NextResponse.json(
+        { 
+          error: 'Erro ao buscar automações',
+          details: automationsError.message 
+        },
+        { status: 500 }
+      )
     }
+
+    console.log(`Encontradas ${automations?.length || 0} automação(ões) no banco de dados`)
 
     if (!automations || automations.length === 0) {
       return NextResponse.json({
