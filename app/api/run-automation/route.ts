@@ -30,8 +30,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
+    // Verificar se as variáveis necessárias estão configuradas
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('SUPABASE_SERVICE_ROLE_KEY não está configurada')
+      return NextResponse.json(
+        { 
+          error: 'Configuração faltando',
+          message: 'A variável SUPABASE_SERVICE_ROLE_KEY deve estar configurada no Vercel. Veja AUTOMATION_SETUP.md para instruções.'
+        },
+        { status: 500 }
+      )
+    }
+
     // Usar service role client para bypassar RLS (necessário para cron jobs)
-    const supabase = getServiceRoleClient()
+    let supabase
+    try {
+      supabase = getServiceRoleClient()
+    } catch (error: any) {
+      console.error('Erro ao criar service role client:', error)
+      return NextResponse.json(
+        { 
+          error: 'Erro de configuração',
+          message: error.message || 'Erro ao inicializar cliente do Supabase'
+        },
+        { status: 500 }
+      )
+    }
 
     // Buscar todas as automações ativas
     const { data: automations, error: automationsError } = await supabase
@@ -253,13 +277,13 @@ export async function GET(request: NextRequest) {
             // Continuar sem categoria se houver erro
           }
 
-          // 11. Criar post como rascunho no WordPress
+          // 11. Criar e publicar post no WordPress
           const post: WordPressPost = {
             title: content.title,
             content: content.content,
             excerpt: content.excerpt,
             featured_media: featuredMediaId,
-            status: 'draft', // Sempre salvar como rascunho para revisão
+            status: 'publish', // Publicar diretamente
             categories: categoryId ? [categoryId] : undefined,
             meta: {
               _yoast_wpseo_title: content.title,
@@ -270,9 +294,9 @@ export async function GET(request: NextRequest) {
 
           const result = await createWordPressPost(site, post)
 
-          // 10. Salvar no Supabase
+          // 12. Salvar no Supabase na tabela published_posts (já que está sendo publicado)
           const { data: postData, error: postError } = await supabase
-            .from('automated_posts')
+            .from('published_posts')
             .insert({
               user_id: automation.user_id,
               site_id: automation.site_id,
@@ -284,8 +308,12 @@ export async function GET(request: NextRequest) {
               image_url: selectedImage || null,
               wordpress_post_id: result.id,
               wordpress_post_url: result.link,
-              status: 'draft',
-              trend_source: selectedTrend,
+              status: 'published',
+              seo_title: content.title,
+              seo_description: content.excerpt || '',
+              focus_keyword: keywordsArray[0] || '',
+              cta_text: ctaText || null,
+              cta_link: ctaLink || null,
             })
             .select()
             .single()
