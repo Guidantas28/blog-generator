@@ -138,6 +138,19 @@ export async function GET(request: NextRequest) {
           continue
         }
 
+        // Verificar se já existe uma execução em andamento (proteção contra duplicatas)
+        const { data: runningExecution } = await supabase
+          .from('automation_executions')
+          .select('id')
+          .eq('automation_id', automation.id)
+          .eq('status', 'running')
+          .maybeSingle()
+
+        if (runningExecution) {
+          console.log(`Automação ${automation.id} já está em execução. Pulando...`)
+          continue
+        }
+
         results.processed++
 
         // Criar registro de execução
