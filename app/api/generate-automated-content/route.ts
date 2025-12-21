@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerClient } from '@/lib/supabase-server'
-import { researchMarketTrends, selectBestImageTopic } from '@/lib/openai-trends'
+import { researchMarketTrends } from '@/lib/openai-trends'
 import { generateKeywords, generateBlogContent } from '@/lib/openai'
-import { searchImages } from '@/lib/images'
+import { searchDiverseImages } from '@/lib/images'
 import { filterDuplicateTrends, checkDuplicateTopic } from '@/lib/duplicate-check'
 
 export const dynamic = 'force-dynamic'
@@ -110,12 +110,25 @@ export async function POST(request: NextRequest) {
       console.warn(`Aviso: Título gerado "${content.title}" é similar a posts anteriores.`)
     }
 
-    // 7. Selecionar melhor query para busca de imagem
-    const imageQuery = await selectBestImageTopic(selectedTrend)
+    // 7. Buscar imagens já usadas neste site para evitar repetições
+    const { data: usedPosts } = await supabase
+      .from('published_posts')
+      .select('image_url')
+      .eq('site_id', siteId)
+      .not('image_url', 'is', null)
+      .limit(100) // Limitar para performance
+    
+    const usedImageUrls = (usedPosts || [])
+      .map(post => post.image_url)
+      .filter((url): url is string => typeof url === 'string' && url.length > 0)
 
-    // 8. Buscar imagens
-    const images = await searchImages(imageQuery, 5)
-    const selectedImage = images.length > 0 ? images[0] : null
+    // 8. Selecionar imagem com diversidade
+    const selectedImage = await searchDiverseImages(
+      selectedTrend,
+      keywordsArray,
+      usedImageUrls,
+      1
+    )
 
     return NextResponse.json({
       topic: selectedTrend,

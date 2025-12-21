@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Query é obrigatória' }, { status: 400 })
     }
 
-    const images = await searchImages(query, 6)
+    const images = await searchImages(query, 15)
 
     return NextResponse.json({ images })
   } catch (error: any) {

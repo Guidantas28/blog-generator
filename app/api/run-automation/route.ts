@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceRoleClient } from '@/lib/supabase-server'
-import { researchMarketTrends, selectBestImageTopic } from '@/lib/openai-trends'
+import { researchMarketTrends } from '@/lib/openai-trends'
 import { generateKeywords, generateBlogContent } from '@/lib/openai'
 import { searchImages } from '@/lib/images'
 import {
@@ -10,7 +10,7 @@ import {
   type WordPressPost,
 } from '@/lib/wordpress'
 import { filterDuplicateTrends, checkDuplicateTopic } from '@/lib/duplicate-check'
-import { downloadImage } from '@/lib/images'
+import { downloadImage, searchDiverseImages } from '@/lib/images'
 
 export const dynamic = 'force-dynamic'
 
@@ -262,12 +262,27 @@ export async function GET(request: NextRequest) {
             console.warn(`Aviso: Título gerado "${content.title}" é similar a posts anteriores.`)
           }
 
-          // 9. Selecionar imagem
-          const imageQuery = await selectBestImageTopic(selectedTrend)
-          const images = await searchImages(imageQuery, 5)
-          const selectedImage = images.length > 0 ? images[0] : null
+          // 9. Buscar imagens já usadas neste site para evitar repetições
+          const { data: usedPosts } = await supabase
+            .from('published_posts')
+            .select('image_url')
+            .eq('site_id', automation.site_id)
+            .not('image_url', 'is', null)
+            .limit(100) // Limitar para performance
+          
+          const usedImageUrls = (usedPosts || [])
+            .map(post => post.image_url)
+            .filter((url): url is string => typeof url === 'string' && url.length > 0)
 
-          // 10. Fazer upload da imagem se houver
+          // 10. Selecionar imagem com diversidade
+          const selectedImage = await searchDiverseImages(
+            selectedTrend,
+            keywordsArray,
+            usedImageUrls,
+            1
+          )
+
+          // 11. Fazer upload da imagem se houver
           let featuredMediaId: number | undefined
           if (selectedImage) {
             try {
@@ -279,7 +294,7 @@ export async function GET(request: NextRequest) {
             }
           }
 
-          // 10. Buscar ou criar categoria padrão
+          // 12. Buscar ou criar categoria padrão
           let categoryId: number | undefined
           try {
             // Usar a categoria do negócio ou primeira keyword como categoria
@@ -290,7 +305,7 @@ export async function GET(request: NextRequest) {
             // Continuar sem categoria se houver erro
           }
 
-          // 11. Criar e publicar post no WordPress
+          // 13. Criar e publicar post no WordPress
           const post: WordPressPost = {
             title: content.title,
             content: content.content,
@@ -307,7 +322,7 @@ export async function GET(request: NextRequest) {
 
           const result = await createWordPressPost(site, post)
 
-          // 12. Salvar no Supabase na tabela published_posts (já que está sendo publicado)
+          // 14. Salvar no Supabase na tabela published_posts (já que está sendo publicado)
           const { data: postData, error: postError } = await supabase
             .from('published_posts')
             .insert({
