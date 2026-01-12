@@ -10,6 +10,14 @@ export interface Database {
           username: string
           password_encrypted: string
           created_at: string
+          cta_text?: string | null
+          cta_link?: string | null
+          phone_number?: string | null
+          cta_primary_color?: string | null
+          cta_secondary_color?: string | null
+          whatsapp_color?: string | null
+          keywords_bg_color?: string | null
+          keywords_text_color?: string | null
         }
         Insert: {
           id?: string
@@ -19,6 +27,14 @@ export interface Database {
           username: string
           password_encrypted: string
           created_at?: string
+          cta_text?: string | null
+          cta_link?: string | null
+          phone_number?: string | null
+          cta_primary_color?: string | null
+          cta_secondary_color?: string | null
+          whatsapp_color?: string | null
+          keywords_bg_color?: string | null
+          keywords_text_color?: string | null
         }
         Update: {
           id?: string
@@ -27,6 +43,14 @@ export interface Database {
           url?: string
           username?: string
           password_encrypted?: string
+          cta_text?: string | null
+          cta_link?: string | null
+          phone_number?: string | null
+          cta_primary_color?: string | null
+          cta_secondary_color?: string | null
+          whatsapp_color?: string | null
+          keywords_bg_color?: string | null
+          keywords_text_color?: string | null
         }
       }
       user_settings: {

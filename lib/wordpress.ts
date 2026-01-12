@@ -6,6 +6,14 @@ export interface WordPressSite {
   username: string
   password: string // Será criptografado
   created_at?: string
+  cta_text?: string
+  cta_link?: string
+  phone_number?: string
+  cta_primary_color?: string
+  cta_secondary_color?: string
+  whatsapp_color?: string
+  keywords_bg_color?: string
+  keywords_text_color?: string
 }
 
 export interface WordPressPost {

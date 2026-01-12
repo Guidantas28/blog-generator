@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import axios from 'axios'
 import {
@@ -22,7 +22,13 @@ import {
   AlertRoot,
   AlertIndicator,
   AlertContent,
+  TabsRoot,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
 } from '@chakra-ui/react'
+import VersionHistory from './VersionHistory'
+import VersionDiff from './VersionDiff'
 
 interface PublishedPost {
   id: string
@@ -40,16 +46,20 @@ interface PublishedPost {
 export default function PostsDashboard({ userId }: { userId: string }) {
   const [posts, setPosts] = useState<PublishedPost[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [refazendoId, setRefazendoId] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const supabase = createClient()
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
+  const [showVersions, setShowVersions] = useState(false)
+  const [versions, setVersions] = useState<any[]>([])
+  const [selectedVersions, setSelectedVersions] = useState<{ v1: any | null; v2: any | null }>({ v1: null, v2: null })
 
-  useEffect(() => {
-    loadPosts()
-  }, [userId])
-
-  const loadPosts = async () => {
+  const loadPosts = useCallback(async () => {
+    const supabase = createClient()
     try {
+      setLoading(true)
+      setError(null)
+      
       // Buscar posts
       const { data: postsData, error: postsError } = await supabase
         .from('published_posts')
@@ -57,13 +67,21 @@ export default function PostsDashboard({ userId }: { userId: string }) {
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
 
-      if (postsError) throw postsError
+      if (postsError) {
+        console.error('Erro ao buscar posts:', postsError)
+        throw new Error(`Erro ao buscar posts: ${postsError.message}`)
+      }
 
       // Buscar sites para fazer o join
-      const { data: sitesData } = await supabase
+      const { data: sitesData, error: sitesError } = await supabase
         .from('wordpress_sites')
         .select('id, name')
         .eq('user_id', userId)
+
+      if (sitesError) {
+        console.error('Erro ao buscar sites:', sitesError)
+        // Não falhar completamente se sites falhar, apenas logar
+      }
 
       const sitesMap = new Map((sitesData || []).map((site: any) => [site.id, site.name]))
 
@@ -73,17 +91,28 @@ export default function PostsDashboard({ userId }: { userId: string }) {
       }))
 
       setPosts(postsWithSiteName)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao carregar posts:', error)
+      setError(error?.message || 'Erro desconhecido ao carregar posts. Por favor, recarregue a página.')
     } finally {
       setLoading(false)
     }
-  }
+  }, [userId])
+
+  useEffect(() => {
+    if (userId) {
+      loadPosts()
+    } else {
+      setError('ID do usuário não encontrado. Por favor, faça login novamente.')
+      setLoading(false)
+    }
+  }, [userId, loadPosts])
 
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este post do histórico?')) return
 
     try {
+      const supabase = createClient()
       const { error } = await supabase
         .from('published_posts')
         .delete()
@@ -96,6 +125,56 @@ export default function PostsDashboard({ userId }: { userId: string }) {
     }
   }
 
+  const handleViewVersions = async (postId: string) => {
+    try {
+      const response = await axios.get(`/api/post-versions?postId=${postId}`)
+      setVersions(response.data.versions || [])
+      setSelectedPostId(postId)
+      setShowVersions(true)
+    } catch (error: any) {
+      console.error('Erro ao carregar versões:', error)
+      alert('Erro ao carregar versões: ' + (error.response?.data?.error || error.message))
+    }
+  }
+
+  const handleRestoreVersion = async (version: any) => {
+    if (!selectedPostId) return
+    
+    try {
+      // Buscar dados do post atual
+      const post = posts.find(p => p.id === selectedPostId)
+      if (!post) return
+
+      // Publicar a versão restaurada
+      const response = await axios.post('/api/publish-post', {
+        siteId: post.site_id,
+        topic: version.title,
+        title: version.title,
+        content: version.content,
+        excerpt: version.excerpt || '',
+        keywords: Array.isArray(version.keywords) ? version.keywords : [],
+        seoTitle: version.seo_title || version.title,
+        seoDescription: version.seo_description || version.excerpt || '',
+        focusKeyword: version.focus_keyword || '',
+        ctaText: version.cta_text,
+        ctaLink: version.cta_link,
+      })
+
+      setMessage({
+        type: 'success',
+        text: `Versão restaurada e publicada com sucesso!`,
+      })
+      setShowVersions(false)
+      loadPosts()
+    } catch (error: any) {
+      console.error('Erro ao restaurar versão:', error)
+      setMessage({
+        type: 'error',
+        text: 'Erro ao restaurar versão: ' + (error.response?.data?.error || error.message),
+      })
+    }
+  }
+
   const handleRefazer = async (post: PublishedPost) => {
     if (!confirm('Deseja regenerar e republicar este post? O post antigo será excluído e um novo será criado.')) return
 
@@ -104,6 +183,7 @@ export default function PostsDashboard({ userId }: { userId: string }) {
 
     try {
       // 1. Buscar dados do site para obter CTA e telefone
+      const supabase = createClient()
       const { data: siteData, error: siteError } = await supabase
         .from('wordpress_sites')
         .select('cta_text, cta_link, phone_number')
@@ -233,6 +313,30 @@ export default function PostsDashboard({ userId }: { userId: string }) {
     <VStack gap={6} align="stretch" px={4} py={6}>
       <Heading size="lg" color="gray.50">Posts Publicados</Heading>
 
+      {error && (
+        <AlertRoot
+          status="error"
+          borderRadius="md"
+          bg="red.900"
+          color="red.100"
+        >
+          <AlertIndicator />
+          <AlertContent>
+            <Text fontWeight="semibold" mb={2}>Erro ao carregar posts</Text>
+            <Text fontSize="sm">{error}</Text>
+            <Button
+              size="sm"
+              mt={3}
+              onClick={loadPosts}
+              colorPalette="red"
+              variant="outline"
+            >
+              Tentar novamente
+            </Button>
+          </AlertContent>
+        </AlertRoot>
+      )}
+
       {message && (
         <AlertRoot
           status={message.type}
@@ -326,6 +430,20 @@ export default function PostsDashboard({ userId }: { userId: string }) {
                       )}
                       <Button
                         size="sm"
+                        colorPalette="blue"
+                        variant="outline"
+                        borderColor="blue.500"
+                        color="blue.200"
+                        px={4}
+                        py={2}
+                        _hover={{ bg: 'blue.800', borderColor: 'blue.400', transform: 'translateY(-1px)' }}
+                        transition="all 0.2s"
+                        onClick={() => handleViewVersions(post.id)}
+                      >
+                        Versões
+                      </Button>
+                      <Button
+                        size="sm"
                         colorPalette="purple"
                         variant="outline"
                         borderColor="purple.500"
@@ -362,6 +480,131 @@ export default function PostsDashboard({ userId }: { userId: string }) {
               ))}
             </TableBody>
           </TableRoot>
+        </Box>
+      )}
+
+      {/* Modal de Versões */}
+      {showVersions && (
+        <Box
+          position="fixed"
+          top={0}
+          left={0}
+          right={0}
+          bottom={0}
+          bg="blackAlpha.700"
+          zIndex={1000}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          p={4}
+          onClick={() => setShowVersions(false)}
+        >
+          <Box
+            bg="gray.800"
+            color="gray.50"
+            borderRadius="lg"
+            shadow="xl"
+            maxW="4xl"
+            w="100%"
+            maxH="90vh"
+            overflowY="auto"
+            onClick={(e) => e.stopPropagation()}
+            borderWidth="1px"
+            borderColor="gray.700"
+          >
+            <Box p={6} borderBottomWidth="1px" borderColor="gray.700">
+              <HStack justify="space-between" align="center">
+                <Heading size="lg">Histórico de Versões</Heading>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowVersions(false)}
+                  colorPalette="gray"
+                >
+                  ✕
+                </Button>
+              </HStack>
+            </Box>
+            <Box p={6}>
+              <TabsRoot defaultValue="history">
+                <TabsList mb={4}>
+                  <TabsTrigger value="history">Histórico</TabsTrigger>
+                  <TabsTrigger value="compare">Comparar</TabsTrigger>
+                </TabsList>
+                <TabsContent value="history">
+                  {selectedPostId && (
+                    <VersionHistory 
+                      postId={selectedPostId} 
+                      onRestore={handleRestoreVersion}
+                    />
+                  )}
+                </TabsContent>
+                <TabsContent value="compare">
+                  <VStack gap={4} align="stretch">
+                    <HStack gap={4}>
+                      <Box flex={1}>
+                        <Text mb={2} color="gray.300">Versão 1:</Text>
+                        <Box as="select" 
+                          w="100%" 
+                          p={2} 
+                          bg="gray.700" 
+                          borderColor="gray.600" 
+                          borderRadius="md"
+                          color="gray.50"
+                          onChange={(e) => {
+                            const target = e.target as HTMLSelectElement
+                            const version = versions.find(v => v.id === target.value)
+                            setSelectedVersions({ ...selectedVersions, v1: version || null })
+                          }}
+                        >
+                          <option value="">Selecione uma versão</option>
+                          {versions.map(v => (
+                            <option key={v.id} value={v.id}>
+                              Versão {v.version_number} - {new Date(v.created_at).toLocaleString('pt-BR')}
+                            </option>
+                          ))}
+                        </Box>
+                      </Box>
+                      <Box flex={1}>
+                        <Text mb={2} color="gray.300">Versão 2:</Text>
+                        <Box as="select" 
+                          w="100%" 
+                          p={2} 
+                          bg="gray.700" 
+                          borderColor="gray.600" 
+                          borderRadius="md"
+                          color="gray.50"
+                          onChange={(e) => {
+                            const target = e.target as HTMLSelectElement
+                            const version = versions.find(v => v.id === target.value)
+                            setSelectedVersions({ ...selectedVersions, v2: version || null })
+                          }}
+                        >
+                          <option value="">Selecione uma versão</option>
+                          {versions.map(v => (
+                            <option key={v.id} value={v.id}>
+                              Versão {v.version_number} - {new Date(v.created_at).toLocaleString('pt-BR')}
+                            </option>
+                          ))}
+                        </Box>
+                      </Box>
+                    </HStack>
+                    {selectedVersions.v1 && selectedVersions.v2 && (
+                      <VersionDiff 
+                        version1={selectedVersions.v1} 
+                        version2={selectedVersions.v2} 
+                      />
+                    )}
+                    {(!selectedVersions.v1 || !selectedVersions.v2) && (
+                      <Box p={8} textAlign="center" bg="gray.700" borderRadius="md">
+                        <Text color="gray.400">Selecione duas versões para comparar</Text>
+                      </Box>
+                    )}
+                  </VStack>
+                </TabsContent>
+              </TabsRoot>
+            </Box>
+          </Box>
         </Box>
       )}
     </VStack>

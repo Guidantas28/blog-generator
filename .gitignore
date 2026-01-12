@@ -13,6 +13,9 @@
 *.md
 !README.md
 
+# Scripts
+/scripts/
+
 # testing
 /coverage
 

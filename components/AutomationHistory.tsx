@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import {
   Box,
@@ -31,6 +31,7 @@ interface AutomationExecution {
   error_message: string | null
   started_at: string
   completed_at: string | null
+  current_step?: string | null
   site_name?: string
   business_category?: string
 }
@@ -40,11 +41,7 @@ export default function AutomationHistory({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
-  useEffect(() => {
-    loadExecutions()
-  }, [userId])
-
-  const loadExecutions = async () => {
+  const loadExecutions = useCallback(async () => {
     setLoading(true)
     try {
       // Buscar execuções
@@ -88,7 +85,25 @@ export default function AutomationHistory({ userId }: { userId: string }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [userId, supabase])
+
+  useEffect(() => {
+    loadExecutions()
+  }, [loadExecutions])
+
+  // Atualizar automaticamente se houver execuções em andamento
+  useEffect(() => {
+    const hasRunningExecutions = executions.some(exec => exec.status === 'running')
+    if (!hasRunningExecutions) {
+      return
+    }
+
+    const interval = setInterval(() => {
+      loadExecutions()
+    }, 5000) // Atualizar a cada 5 segundos quando houver execuções em andamento
+    
+    return () => clearInterval(interval)
+  }, [executions, loadExecutions])
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -166,6 +181,9 @@ export default function AutomationHistory({ userId }: { userId: string }) {
                   Status
                 </TableColumnHeader>
                 <TableColumnHeader color="gray.100" fontWeight="semibold" py={4} px={4}>
+                  Etapa Atual
+                </TableColumnHeader>
+                <TableColumnHeader color="gray.100" fontWeight="semibold" py={4} px={4}>
                   Erro
                 </TableColumnHeader>
               </TableRow>
@@ -201,6 +219,17 @@ export default function AutomationHistory({ userId }: { userId: string }) {
                   </TableCell>
                   <TableCell py={4} px={4}>
                     {getStatusBadge(execution.status)}
+                  </TableCell>
+                  <TableCell py={4} px={4}>
+                    {execution.current_step ? (
+                      <Text fontSize="sm" color="gray.300" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {execution.current_step}
+                      </Text>
+                    ) : (
+                      <Text fontSize="xs" color="gray.400">
+                        -
+                      </Text>
+                    )}
                   </TableCell>
                   <TableCell py={4} px={4}>
                     {execution.error_message ? (

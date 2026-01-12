@@ -68,6 +68,30 @@ export async function downloadImage(url: string): Promise<Blob> {
 }
 
 /**
+ * Normaliza uma URL de imagem removendo parâmetros de query para comparação
+ * Exemplo: "https://example.com/image.jpg?w=800&h=600" -> "https://example.com/image.jpg"
+ */
+function normalizeImageUrl(url: string): string {
+  try {
+    const urlObj = new URL(url)
+    // Remover todos os parâmetros de query
+    urlObj.search = ''
+    return urlObj.toString()
+  } catch {
+    // Se não for uma URL válida, tentar remover parâmetros manualmente
+    return url.split('?')[0].split('#')[0]
+  }
+}
+
+/**
+ * Verifica se uma URL de imagem já foi usada, comparando URLs normalizadas
+ */
+function isImageUsed(imageUrl: string, usedImageUrls: string[]): boolean {
+  const normalized = normalizeImageUrl(imageUrl)
+  return usedImageUrls.some(used => normalizeImageUrl(used) === normalized)
+}
+
+/**
  * Gera múltiplas queries variadas para busca de imagens
  */
 export async function generateImageQueries(topic: string, keywords: string[] = []): Promise<string[]> {
@@ -132,71 +156,130 @@ export async function generateImageQueries(topic: string, keywords: string[] = [
  * @param keywords - Palavras-chave do post
  * @param usedImageUrls - URLs de imagens já usadas (opcional)
  * @param minCount - Número mínimo de imagens para buscar
+ * @param maxRetries - Número máximo de tentativas para encontrar uma imagem única
  */
 export async function searchDiverseImages(
   topic: string,
   keywords: string[] = [],
   usedImageUrls: string[] = [],
-  minCount: number = 1
+  minCount: number = 1,
+  maxRetries: number = 3
 ): Promise<string | null> {
-  try {
-    // Gerar múltiplas queries variadas
-    const queries = await generateImageQueries(topic, keywords)
-    
-    // Buscar imagens de múltiplas queries
-    const allImages: string[] = []
-    const searchedQueries = new Set<string>()
-    
-    for (const query of queries) {
-      if (searchedQueries.has(query.toLowerCase())) continue
-      searchedQueries.add(query.toLowerCase())
-      
-      try {
-        // Buscar mais imagens por query para ter mais opções
-        const images = await searchImages(query, 10)
-        allImages.push(...images)
-        
-        // Se já temos imagens suficientes, podemos parar
-        if (allImages.length >= 20) break
-      } catch (error) {
-        console.warn(`Erro ao buscar imagens com query "${query}":`, error)
-        // Continuar com próxima query
-      }
-    }
-    
-    if (allImages.length === 0) {
-      return null
-    }
-    
-    // Remover duplicatas
-    const uniqueImages = [...new Set(allImages)]
-    
-    // Filtrar imagens já usadas
-    const unusedImages = uniqueImages.filter(img => !usedImageUrls.includes(img))
-    
-    // Selecionar aleatoriamente
-    const imagesToChooseFrom = unusedImages.length > 0 ? unusedImages : uniqueImages
-    
-    if (imagesToChooseFrom.length === 0) {
-      return null
-    }
-    
-    // Selecionar aleatoriamente entre as imagens disponíveis
-    const randomIndex = Math.floor(Math.random() * imagesToChooseFrom.length)
-    return imagesToChooseFrom[randomIndex]
-  } catch (error) {
-    console.error('Erro ao buscar imagens diversas:', error)
-    // Fallback: buscar com query simples
+  // Normalizar URLs já usadas para comparação
+  const normalizedUsedUrls = usedImageUrls.map(url => normalizeImageUrl(url))
+  
+  // Tentar múltiplas vezes para garantir que encontramos uma imagem
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const images = await searchImages(topic, 10)
-      if (images.length > 0) {
-        const randomIndex = Math.floor(Math.random() * images.length)
-        return images[randomIndex]
+      // Gerar múltiplas queries variadas
+      const queries = await generateImageQueries(topic, keywords)
+      
+      // Buscar imagens de múltiplas queries
+      const allImages: string[] = []
+      const searchedQueries = new Set<string>()
+      
+      // Aumentar número de imagens por query em tentativas subsequentes
+      const imagesPerQuery = 10 + (attempt * 5)
+      
+      for (const query of queries) {
+        if (searchedQueries.has(query.toLowerCase())) continue
+        searchedQueries.add(query.toLowerCase())
+        
+        try {
+          // Buscar mais imagens por query para ter mais opções
+          const images = await searchImages(query, imagesPerQuery)
+          if (images && images.length > 0) {
+            allImages.push(...images)
+          }
+          
+          // Se já temos imagens suficientes, podemos parar
+          if (allImages.length >= 50) break
+        } catch (error) {
+          console.warn(`Erro ao buscar imagens com query "${query}":`, error)
+          // Continuar com próxima query
+        }
       }
-    } catch (fallbackError) {
-      console.error('Erro no fallback de busca de imagens:', fallbackError)
+      
+      if (allImages.length === 0) {
+        // Se não encontrou imagens, tentar fallback simples
+        if (attempt < maxRetries - 1) {
+          console.warn(`Tentativa ${attempt + 1} não encontrou imagens. Tentando novamente...`)
+          continue
+        }
+        // Última tentativa: buscar com query simples
+        try {
+          const fallbackImages = await searchImages(topic, 20)
+          if (fallbackImages && fallbackImages.length > 0) {
+            allImages.push(...fallbackImages)
+          }
+        } catch (fallbackError) {
+          console.error('Erro no fallback de busca de imagens:', fallbackError)
+        }
+        
+        if (allImages.length === 0) {
+          console.error('Não foi possível encontrar imagens após todas as tentativas')
+          return null
+        }
+      }
+      
+      // Remover duplicatas baseado em URLs normalizadas
+      const seenNormalized = new Set<string>()
+      const uniqueImages: string[] = []
+      
+      for (const img of allImages) {
+        const normalized = normalizeImageUrl(img)
+        if (!seenNormalized.has(normalized)) {
+          seenNormalized.add(normalized)
+          uniqueImages.push(img)
+        }
+      }
+      
+      // Filtrar imagens já usadas usando comparação normalizada
+      const unusedImages = uniqueImages.filter(img => !isImageUsed(img, normalizedUsedUrls))
+      
+      // Selecionar aleatoriamente
+      const imagesToChooseFrom = unusedImages.length > 0 ? unusedImages : uniqueImages
+      
+      if (imagesToChooseFrom.length === 0) {
+        // Se todas as imagens foram usadas, tentar novamente com mais queries
+        if (attempt < maxRetries - 1) {
+          console.warn(`Todas as imagens encontradas já foram usadas. Tentando novamente...`)
+          continue
+        }
+        // Na última tentativa, usar qualquer imagem disponível mesmo que já tenha sido usada
+        // (melhor ter uma imagem repetida do que nenhuma)
+        if (uniqueImages.length > 0) {
+          console.warn('Usando imagem que pode ter sido usada anteriormente (melhor que nenhuma)')
+          const randomIndex = Math.floor(Math.random() * uniqueImages.length)
+          return uniqueImages[randomIndex]
+        }
+        return null
+      }
+      
+      // Selecionar aleatoriamente entre as imagens disponíveis
+      const randomIndex = Math.floor(Math.random() * imagesToChooseFrom.length)
+      const selectedImage = imagesToChooseFrom[randomIndex]
+      
+      console.log(`Imagem selecionada com sucesso (tentativa ${attempt + 1}/${maxRetries})`)
+      return selectedImage
+    } catch (error) {
+      console.error(`Erro ao buscar imagens diversas (tentativa ${attempt + 1}):`, error)
+      if (attempt === maxRetries - 1) {
+        // Última tentativa: fallback simples
+        try {
+          const images = await searchImages(topic, 20)
+          if (images && images.length > 0) {
+            const randomIndex = Math.floor(Math.random() * images.length)
+            console.warn('Usando fallback simples para buscar imagem')
+            return images[randomIndex]
+          }
+        } catch (fallbackError) {
+          console.error('Erro no fallback final de busca de imagens:', fallbackError)
+        }
+        return null
+      }
     }
-    return null
   }
+  
+  return null
 }
-

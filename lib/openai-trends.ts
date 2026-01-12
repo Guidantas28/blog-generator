@@ -10,15 +10,25 @@ const openai = new OpenAI({
 export async function researchMarketTrends(
   businessCategory: string
 ): Promise<string[]> {
+  // Obter data atual formatada
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+  const currentMonth = months[now.getMonth()]
+  const currentDate = `${currentMonth} de ${currentYear}`
+
   const prompt = `Você é um especialista em marketing digital e análise de tendências.
 
-Com base na categoria de negócio "${businessCategory}", identifique as 5 principais tendências e tópicos relevantes que estão em alta no momento e que seriam interessantes para criar conteúdo de blog.
+IMPORTANTE: A data atual é ${currentDate} (${currentYear}). Considere apenas tendências atuais e relevantes para ${currentYear}.
+
+Com base na categoria de negócio "${businessCategory}", identifique as 5 principais tendências e tópicos relevantes que estão em alta no momento (${currentYear}) e que seriam interessantes para criar conteúdo de blog.
 
 Considere:
-- Tendências atuais do mercado
-- Tópicos que geram engajamento
+- Tendências atuais do mercado em ${currentYear}
+- Tópicos que geram engajamento no momento atual
 - Assuntos relevantes para o público-alvo dessa categoria
 - Oportunidades de conteúdo que podem gerar tráfego
+- Evite tendências desatualizadas ou de anos anteriores
 
 Retorne um objeto JSON com uma propriedade "trends" que seja um array de strings, onde cada string é um tópico/tendência específica.
 Exemplo: {"trends": ["Tendência 1", "Tendência 2", "Tendência 3"]}`
@@ -30,7 +40,7 @@ Exemplo: {"trends": ["Tendência 1", "Tendência 2", "Tendência 3"]}`
         {
           role: 'system',
           content:
-            'Você é um especialista em marketing digital. Retorne apenas um objeto JSON válido com a propriedade "trends" contendo um array de strings.',
+            `Você é um especialista em marketing digital. A data atual é ${currentDate} (${currentYear}). Considere apenas tendências atuais de ${currentYear}. Retorne apenas um objeto JSON válido com a propriedade "trends" contendo um array de strings.`,
         },
         {
           role: 'user',

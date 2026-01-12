@@ -36,8 +36,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Site não encontrado' }, { status: 404 })
     }
 
-    // Decriptografar senha
-    const password = atob(siteData.password_encrypted)
+    // Descriptografar senha
+    const { decrypt } = await import('@/lib/encryption')
+    const password = decrypt(siteData.password_encrypted)
 
     const site = {
       id: siteData.id,
@@ -51,13 +52,28 @@ export async function POST(request: NextRequest) {
     // Excluir post do WordPress
     await deleteWordPressPost(site, postId)
 
+    const { logger } = await import('@/lib/logger')
+    logger.info('Post excluído com sucesso', {
+      endpoint: '/api/delete-wordpress-post',
+      userId: session.user.id,
+      siteId,
+      postId,
+    })
+
     return NextResponse.json({
       message: 'Post excluído com sucesso!',
     })
   } catch (error: any) {
-    console.error('Erro ao excluir post:', error)
+    const { logger } = await import('@/lib/logger')
+    logger.error('Erro ao excluir post', error, {
+      endpoint: '/api/delete-wordpress-post',
+    })
+    
     return NextResponse.json(
-      { error: error.message || 'Erro ao excluir post' },
+      {
+        error: error.message || 'Erro ao excluir post',
+        ...(process.env.NODE_ENV === 'development' && { stack: error.stack }),
+      },
       { status: 500 }
     )
   }

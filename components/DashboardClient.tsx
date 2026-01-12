@@ -24,6 +24,21 @@ import PostsDashboard from './PostsDashboard'
 import AutomationSettings from './AutomationSettings'
 import AutoContentGenerator from './AutoContentGenerator'
 import AutomationHistory from './AutomationHistory'
+import PostScheduler from './PostScheduler'
+import CalendarView from './CalendarView'
+import ContentLibrary from './ContentLibrary'
+import AnalyticsDashboard from './AnalyticsDashboard'
+import { 
+  Sparkles, 
+  Globe, 
+  FileText, 
+  Calendar, 
+  List, 
+  BookOpen, 
+  Settings as SettingsIcon,
+  Zap,
+  BarChart3
+} from 'lucide-react'
 
 interface WordPressSite {
   id: string
@@ -33,6 +48,11 @@ interface WordPressSite {
   cta_text?: string
   cta_link?: string
   phone_number?: string
+  cta_primary_color?: string
+  cta_secondary_color?: string
+  whatsapp_color?: string
+  keywords_bg_color?: string
+  keywords_text_color?: string
 }
 
 export default function DashboardClient({ userId }: { userId: string }) {
@@ -67,7 +87,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
     try {
       const { data, error } = await supabase
         .from('wordpress_sites')
-        .select('id, name, url, username, cta_text, cta_link, phone_number')
+        .select('id, name, url, username, cta_text, cta_link, phone_number, cta_primary_color, cta_secondary_color, whatsapp_color, keywords_bg_color, keywords_text_color')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
 
@@ -188,14 +208,171 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
       <Container maxW="7xl" py={6}>
         <TabsRoot defaultValue="auto" colorPalette="blue">
-          <TabsList gap={4} mb={4}>
-            <TabsTrigger value="auto" px={6} py={3}>Gerar Automático</TabsTrigger>
-            <TabsTrigger value="sites" px={6} py={3}>Meus Sites</TabsTrigger>
-            <TabsTrigger value="create" px={6} py={3}>Criar Post</TabsTrigger>
-            <TabsTrigger value="posts" px={6} py={3}>Posts Publicados</TabsTrigger>
-            <TabsTrigger value="automation" px={6} py={3}>Automação</TabsTrigger>
-            <TabsTrigger value="settings" px={6} py={3}>Configurações</TabsTrigger>
-          </TabsList>
+          <Box 
+            borderBottomWidth="1px" 
+            borderColor="gray.700" 
+            mb={6}
+            overflowX="auto"
+            css={{
+              '&::-webkit-scrollbar': {
+                height: '6px',
+              },
+              '&::-webkit-scrollbar-track': {
+                background: 'transparent',
+              },
+              '&::-webkit-scrollbar-thumb': {
+                background: '#4B5563',
+                borderRadius: '3px',
+              },
+              '&::-webkit-scrollbar-thumb:hover': {
+                background: '#6B7280',
+              },
+            }}
+          >
+            <TabsList 
+              gap={2} 
+              mb={0}
+              borderBottom="none"
+              minW="max-content"
+              flexWrap="nowrap"
+            >
+              <TabsTrigger 
+                value="auto" 
+                px={4} 
+                py={3}
+                display="flex"
+                alignItems="center"
+                gap={2}
+                whiteSpace="nowrap"
+                fontSize="sm"
+                fontWeight="medium"
+                minW="fit-content"
+              >
+                <Sparkles size={18} />
+                <Text as="span">Gerar</Text>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="sites" 
+                px={4} 
+                py={3}
+                display="flex"
+                alignItems="center"
+                gap={2}
+                whiteSpace="nowrap"
+                fontSize="sm"
+                fontWeight="medium"
+                minW="fit-content"
+              >
+                <Globe size={18} />
+                <Text as="span">Sites</Text>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="create" 
+                px={4} 
+                py={3}
+                display="flex"
+                alignItems="center"
+                gap={2}
+                whiteSpace="nowrap"
+                fontSize="sm"
+                fontWeight="medium"
+                minW="fit-content"
+              >
+                <FileText size={18} />
+                <Text as="span">Criar</Text>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="schedule" 
+                px={4} 
+                py={3}
+                display="flex"
+                alignItems="center"
+                gap={2}
+                whiteSpace="nowrap"
+                fontSize="sm"
+                fontWeight="medium"
+                minW="fit-content"
+              >
+                <Calendar size={18} />
+                <Text as="span">Agendar</Text>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="posts" 
+                px={4} 
+                py={3}
+                display="flex"
+                alignItems="center"
+                gap={2}
+                whiteSpace="nowrap"
+                fontSize="sm"
+                fontWeight="medium"
+                minW="fit-content"
+              >
+                <List size={18} />
+                <Text as="span">Publicados</Text>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="library" 
+                px={4} 
+                py={3}
+                display="flex"
+                alignItems="center"
+                gap={2}
+                whiteSpace="nowrap"
+                fontSize="sm"
+                fontWeight="medium"
+                minW="fit-content"
+              >
+                <BookOpen size={18} />
+                <Text as="span">Biblioteca</Text>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="automation" 
+                px={4} 
+                py={3}
+                display="flex"
+                alignItems="center"
+                gap={2}
+                whiteSpace="nowrap"
+                fontSize="sm"
+                fontWeight="medium"
+                minW="fit-content"
+              >
+                <Zap size={18} />
+                <Text as="span">Automação</Text>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="analytics" 
+                px={4} 
+                py={3}
+                display="flex"
+                alignItems="center"
+                gap={2}
+                whiteSpace="nowrap"
+                fontSize="sm"
+                fontWeight="medium"
+                minW="fit-content"
+              >
+                <BarChart3 size={18} />
+                <Text as="span">Analytics</Text>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="settings" 
+                px={4} 
+                py={3}
+                display="flex"
+                alignItems="center"
+                gap={2}
+                whiteSpace="nowrap"
+                fontSize="sm"
+                fontWeight="medium"
+                minW="fit-content"
+              >
+                <SettingsIcon size={18} />
+                <Text as="span">Config</Text>
+              </TabsTrigger>
+            </TabsList>
+          </Box>
 
           <TabsContent value="auto" px={0}>
             <AutoContentGenerator sites={sites} userId={userId} />
@@ -206,14 +383,26 @@ export default function DashboardClient({ userId }: { userId: string }) {
           <TabsContent value="create" px={0}>
             <PostCreator sites={sites} />
           </TabsContent>
+          <TabsContent value="schedule" px={0}>
+            <PostScheduler sites={sites} onScheduled={loadSites} />
+            <Box mt={8}>
+              <CalendarView userId={userId} />
+            </Box>
+          </TabsContent>
           <TabsContent value="posts" px={0}>
             <PostsDashboard userId={userId} />
+          </TabsContent>
+          <TabsContent value="library" px={0}>
+            <ContentLibrary />
           </TabsContent>
           <TabsContent value="automation" px={0}>
             <AutomationSettings userId={userId} />
             <Box mt={8}>
               <AutomationHistory userId={userId} />
             </Box>
+          </TabsContent>
+          <TabsContent value="analytics" px={0}>
+            <AnalyticsDashboard userId={userId} />
           </TabsContent>
           <TabsContent value="settings" px={0}>
             <Settings userId={userId} />

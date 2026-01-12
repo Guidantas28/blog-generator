@@ -30,10 +30,28 @@ interface WordPressSite {
   cta_text?: string
   cta_link?: string
   phone_number?: string
+  cta_primary_color?: string
+  cta_secondary_color?: string
+  whatsapp_color?: string
+  keywords_bg_color?: string
+  keywords_text_color?: string
 }
 
 interface SiteManagerProps {
-  sites: Array<{ id: string; name: string; url: string; username: string; cta_text?: string; cta_link?: string; phone_number?: string }>
+  sites: Array<{ 
+    id: string
+    name: string
+    url: string
+    username: string
+    cta_text?: string
+    cta_link?: string
+    phone_number?: string
+    cta_primary_color?: string
+    cta_secondary_color?: string
+    whatsapp_color?: string
+    keywords_bg_color?: string
+    keywords_text_color?: string
+  }>
   onSitesChange: () => void
   userId: string
 }
@@ -49,12 +67,17 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
     cta_text: '',
     cta_link: '',
     phone_number: '',
+    cta_primary_color: '#667eea',
+    cta_secondary_color: '#764ba2',
+    whatsapp_color: '#25D366',
+    keywords_bg_color: '#1e3a8a',
+    keywords_text_color: '#ffffff',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
 
-  const canAddSite = sites.length < 3
+  const canAddSite = sites.length < 10
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -75,11 +98,29 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
         cta_text: formData.cta_text?.trim() || null,
         cta_link: formData.cta_link?.trim() || null,
         phone_number: formData.phone_number?.trim() || null,
+        cta_primary_color: formData.cta_primary_color?.trim() || null,
+        cta_secondary_color: formData.cta_secondary_color?.trim() || null,
+        whatsapp_color: formData.whatsapp_color?.trim() || null,
+        keywords_bg_color: formData.keywords_bg_color?.trim() || null,
+        keywords_text_color: formData.keywords_text_color?.trim() || null,
       }
 
       // Só atualizar senha se foi fornecida (ou se for criação)
       if (!editingId || formData.password.trim()) {
-        siteData.password_encrypted = btoa(formData.password)
+        // Criptografar senha usando API route (server-side)
+        const response = await fetch('/api/encrypt-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: formData.password }),
+        })
+        
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Erro ao criptografar senha')
+        }
+        
+        const { encrypted } = await response.json()
+        siteData.password_encrypted = encrypted
       }
 
       if (editingId) {
@@ -101,7 +142,20 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
         if (error) throw error
       }
 
-      setFormData({ name: '', url: '', username: '', password: '', cta_text: '', cta_link: '', phone_number: '' })
+      setFormData({ 
+        name: '', 
+        url: '', 
+        username: '', 
+        password: '', 
+        cta_text: '', 
+        cta_link: '', 
+        phone_number: '',
+        cta_primary_color: '#667eea',
+        cta_secondary_color: '#764ba2',
+        whatsapp_color: '#25D366',
+        keywords_bg_color: '#1e3a8a',
+        keywords_text_color: '#ffffff',
+      })
       setShowForm(false)
       setEditingId(null)
       onSitesChange()
@@ -112,7 +166,20 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
     }
   }
 
-  const handleEdit = async (site: { id: string; name: string; url: string; username: string; cta_text?: string; cta_link?: string; phone_number?: string }) => {
+  const handleEdit = async (site: { 
+    id: string
+    name: string
+    url: string
+    username: string
+    cta_text?: string
+    cta_link?: string
+    phone_number?: string
+    cta_primary_color?: string
+    cta_secondary_color?: string
+    whatsapp_color?: string
+    keywords_bg_color?: string
+    keywords_text_color?: string
+  }) => {
     // Buscar a senha não é possível (está encriptada), então deixamos vazio
     setFormData({
       name: site.name,
@@ -122,6 +189,11 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
       cta_text: site.cta_text || '',
       cta_link: site.cta_link || '',
       phone_number: site.phone_number || '',
+      cta_primary_color: site.cta_primary_color || '#667eea',
+      cta_secondary_color: site.cta_secondary_color || '#764ba2',
+      whatsapp_color: site.whatsapp_color || '#25D366',
+      keywords_bg_color: site.keywords_bg_color || '#1e3a8a',
+      keywords_text_color: site.keywords_text_color || '#ffffff',
     })
     setEditingId(site.id)
     setShowForm(true)
@@ -182,7 +254,7 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
         {!canAddSite && (
           <AlertRoot status="warning" borderRadius="md" mb={4} bg="yellow.900" color="yellow.100">
             <AlertIndicator />
-            <AlertContent>Você atingiu o limite de 3 sites cadastrados.</AlertContent>
+            <AlertContent>Você atingiu o limite de 10 sites cadastrados.</AlertContent>
           </AlertRoot>
         )}
 
@@ -347,6 +419,185 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
                     Número de telefone do WhatsApp (apenas números, com código do país)
                   </Text>
                 </FieldRoot>
+
+                <Heading size="sm" color="gray.200" mt={4} mb={2}>
+                  Personalização de Cores (opcional)
+                </Heading>
+                <Text fontSize="xs" color="gray.400" mb={4}>
+                  Personalize as cores dos botões e elementos visuais dos posts deste site
+                </Text>
+
+                <SimpleGrid columns={{ base: 1, md: 2 }} gap={4}>
+                  <FieldRoot>
+                    <FieldLabel color="gray.300" fontWeight="medium">
+                      Cor Primária do CTA
+                    </FieldLabel>
+                    <HStack gap={2}>
+                      <Input
+                        type="color"
+                        value={formData.cta_primary_color || '#667eea'}
+                        onChange={(e) => setFormData({ ...formData, cta_primary_color: e.target.value })}
+                        width="60px"
+                        height="40px"
+                        p={0}
+                        border="none"
+                        cursor="pointer"
+                      />
+                      <Input
+                        type="text"
+                        value={formData.cta_primary_color || '#667eea'}
+                        onChange={(e) => setFormData({ ...formData, cta_primary_color: e.target.value })}
+                        placeholder="#667eea"
+                        bg="gray.600"
+                        borderColor="gray.500"
+                        color="gray.50"
+                        size="lg"
+                        flex={1}
+                        _placeholder={{ color: 'gray.400' }}
+                        _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
+                      />
+                    </HStack>
+                    <Text fontSize="xs" color="gray.400" mt={1}>
+                      Cor inicial do gradiente do botão CTA
+                    </Text>
+                  </FieldRoot>
+
+                  <FieldRoot>
+                    <FieldLabel color="gray.300" fontWeight="medium">
+                      Cor Secundária do CTA
+                    </FieldLabel>
+                    <HStack gap={2}>
+                      <Input
+                        type="color"
+                        value={formData.cta_secondary_color || '#764ba2'}
+                        onChange={(e) => setFormData({ ...formData, cta_secondary_color: e.target.value })}
+                        width="60px"
+                        height="40px"
+                        p={0}
+                        border="none"
+                        cursor="pointer"
+                      />
+                      <Input
+                        type="text"
+                        value={formData.cta_secondary_color || '#764ba2'}
+                        onChange={(e) => setFormData({ ...formData, cta_secondary_color: e.target.value })}
+                        placeholder="#764ba2"
+                        bg="gray.600"
+                        borderColor="gray.500"
+                        color="gray.50"
+                        size="lg"
+                        flex={1}
+                        _placeholder={{ color: 'gray.400' }}
+                        _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
+                      />
+                    </HStack>
+                    <Text fontSize="xs" color="gray.400" mt={1}>
+                      Cor final do gradiente do botão CTA
+                    </Text>
+                  </FieldRoot>
+
+                  <FieldRoot>
+                    <FieldLabel color="gray.300" fontWeight="medium">
+                      Cor do WhatsApp
+                    </FieldLabel>
+                    <HStack gap={2}>
+                      <Input
+                        type="color"
+                        value={formData.whatsapp_color || '#25D366'}
+                        onChange={(e) => setFormData({ ...formData, whatsapp_color: e.target.value })}
+                        width="60px"
+                        height="40px"
+                        p={0}
+                        border="none"
+                        cursor="pointer"
+                      />
+                      <Input
+                        type="text"
+                        value={formData.whatsapp_color || '#25D366'}
+                        onChange={(e) => setFormData({ ...formData, whatsapp_color: e.target.value })}
+                        placeholder="#25D366"
+                        bg="gray.600"
+                        borderColor="gray.500"
+                        color="gray.50"
+                        size="lg"
+                        flex={1}
+                        _placeholder={{ color: 'gray.400' }}
+                        _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
+                      />
+                    </HStack>
+                    <Text fontSize="xs" color="gray.400" mt={1}>
+                      Cor do link do WhatsApp
+                    </Text>
+                  </FieldRoot>
+
+                  <FieldRoot>
+                    <FieldLabel color="gray.300" fontWeight="medium">
+                      Cor de Fundo das Palavras-chave
+                    </FieldLabel>
+                    <HStack gap={2}>
+                      <Input
+                        type="color"
+                        value={formData.keywords_bg_color || '#1e3a8a'}
+                        onChange={(e) => setFormData({ ...formData, keywords_bg_color: e.target.value })}
+                        width="60px"
+                        height="40px"
+                        p={0}
+                        border="none"
+                        cursor="pointer"
+                      />
+                      <Input
+                        type="text"
+                        value={formData.keywords_bg_color || '#1e3a8a'}
+                        onChange={(e) => setFormData({ ...formData, keywords_bg_color: e.target.value })}
+                        placeholder="#1e3a8a"
+                        bg="gray.600"
+                        borderColor="gray.500"
+                        color="gray.50"
+                        size="lg"
+                        flex={1}
+                        _placeholder={{ color: 'gray.400' }}
+                        _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
+                      />
+                    </HStack>
+                    <Text fontSize="xs" color="gray.400" mt={1}>
+                      Cor de fundo dos botões de palavras-chave
+                    </Text>
+                  </FieldRoot>
+
+                  <FieldRoot>
+                    <FieldLabel color="gray.300" fontWeight="medium">
+                      Cor do Texto das Palavras-chave
+                    </FieldLabel>
+                    <HStack gap={2}>
+                      <Input
+                        type="color"
+                        value={formData.keywords_text_color || '#ffffff'}
+                        onChange={(e) => setFormData({ ...formData, keywords_text_color: e.target.value })}
+                        width="60px"
+                        height="40px"
+                        p={0}
+                        border="none"
+                        cursor="pointer"
+                      />
+                      <Input
+                        type="text"
+                        value={formData.keywords_text_color || '#ffffff'}
+                        onChange={(e) => setFormData({ ...formData, keywords_text_color: e.target.value })}
+                        placeholder="#ffffff"
+                        bg="gray.600"
+                        borderColor="gray.500"
+                        color="gray.50"
+                        size="lg"
+                        flex={1}
+                        _placeholder={{ color: 'gray.400' }}
+                        _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
+                      />
+                    </HStack>
+                    <Text fontSize="xs" color="gray.400" mt={1}>
+                      Cor do texto dos botões de palavras-chave
+                    </Text>
+                  </FieldRoot>
+                </SimpleGrid>
 
                 {error && (
                   <AlertRoot status="error" borderRadius="md" bg="red.900" color="red.100">

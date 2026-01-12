@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import {
   Box,
@@ -25,7 +25,8 @@ import { useToastContext } from '@/contexts/ToastContext'
 
 export default function Settings({ userId }: { userId: string }) {
   const [sites, setSites] = useState<Array<{ id: string; name: string; cta_text?: string; cta_link?: string; phone_number?: string }>>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState('')
   const [newEmail, setNewEmail] = useState('')
   const [currentPasswordForEmail, setCurrentPasswordForEmail] = useState('')
@@ -34,43 +35,68 @@ export default function Settings({ userId }: { userId: string }) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [updatingEmail, setUpdatingEmail] = useState(false)
   const [updatingPassword, setUpdatingPassword] = useState(false)
-  const supabase = createClient()
   const toast = useToastContext()
 
-  useEffect(() => {
-    loadSites()
-    loadUserEmail()
-  }, [userId])
-
-  const loadUserEmail = async () => {
+  const loadUserEmail = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const supabase = createClient()
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError) {
+        console.error('Erro ao buscar usuário:', userError)
+        throw new Error(`Erro ao carregar dados do usuário: ${userError.message}`)
+      }
+      
       if (user?.email) {
         setUserEmail(user.email)
         setNewEmail(user.email)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao carregar email do usuário:', error)
+      setError(error?.message || 'Erro ao carregar dados do usuário')
     }
-  }
+  }, [])
 
-  const loadSites = async () => {
+  const loadSites = useCallback(async () => {
+    if (!userId) {
+      setError('ID do usuário não encontrado. Por favor, faça login novamente.')
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
+    setError(null)
     try {
-      const { data, error } = await supabase
+      const supabase = createClient()
+      const { data, error: sitesError } = await supabase
         .from('wordpress_sites')
         .select('id, name, cta_text, cta_link, phone_number')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (sitesError) {
+        console.error('Erro ao buscar sites:', sitesError)
+        throw new Error(`Erro ao carregar sites: ${sitesError.message}`)
+      }
+      
       setSites(data || [])
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao carregar sites:', error)
+      setError(error?.message || 'Erro desconhecido ao carregar sites. Por favor, recarregue a página.')
     } finally {
       setLoading(false)
     }
-  }
+  }, [userId])
+
+  useEffect(() => {
+    if (userId) {
+      loadSites()
+      loadUserEmail()
+    } else {
+      setError('ID do usuário não encontrado. Por favor, faça login novamente.')
+      setLoading(false)
+    }
+  }, [userId, loadSites, loadUserEmail])
 
   const handleUpdateEmail = async () => {
     if (!newEmail.trim() || newEmail === userEmail) {
@@ -85,6 +111,7 @@ export default function Settings({ userId }: { userId: string }) {
 
     setUpdatingEmail(true)
     try {
+      const supabase = createClient()
       // Verificar senha atual
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: userEmail,
@@ -138,6 +165,7 @@ export default function Settings({ userId }: { userId: string }) {
 
     setUpdatingPassword(true)
     try {
+      const supabase = createClient()
       // Verificar senha atual
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: userEmail,
@@ -179,6 +207,35 @@ export default function Settings({ userId }: { userId: string }) {
 
   return (
     <VStack gap={6} align="stretch" px={4} py={6}>
+      {error && (
+        <AlertRoot
+          status="error"
+          borderRadius="md"
+          bg="red.900"
+          color="red.100"
+        >
+          <AlertIndicator />
+          <AlertContent>
+            <Text fontWeight="semibold" mb={2}>Erro ao carregar configurações</Text>
+            <Text fontSize="sm">{error}</Text>
+            <Button
+              size="sm"
+              mt={3}
+              onClick={() => {
+                if (userId) {
+                  loadSites()
+                  loadUserEmail()
+                }
+              }}
+              colorPalette="red"
+              variant="outline"
+            >
+              Tentar novamente
+            </Button>
+          </AlertContent>
+        </AlertRoot>
+      )}
+
       {/* Seção de Conta */}
       <Box
         bg="gray.800"

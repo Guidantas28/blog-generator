@@ -9,14 +9,30 @@ export async function generateBlogContent(
   keywords: string[],
   ctaText?: string,
   ctaLink?: string,
-  phoneNumber?: string
+  phoneNumber?: string,
+  colors?: {
+    cta_primary_color?: string
+    cta_secondary_color?: string
+    whatsapp_color?: string
+    keywords_bg_color?: string
+    keywords_text_color?: string
+  }
 ): Promise<{ title: string; content: string; excerpt: string }> {
   const keywordsText = keywords.join(', ')
   const ctaSection = ctaText && ctaLink 
     ? `\n\n[CTA]\n${ctaText}\nLink: ${ctaLink}\n[/CTA]` 
     : ''
 
+  // Obter data atual formatada
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+  const currentMonth = months[now.getMonth()]
+  const currentDate = `${currentMonth} de ${currentYear}`
+
   const prompt = `Crie um post de blog completo e profissional em português sobre "${topic}".
+
+IMPORTANTE: A data atual é ${currentDate} (${currentYear}). Use sempre informações, dados, estatísticas e referências atualizadas para ${currentYear}. Não use dados ou referências de anos anteriores como 2023 ou 2024, a menos que seja para comparação histórica.
 
 Palavras-chave para incluir: ${keywordsText}
 
@@ -26,6 +42,8 @@ Requisitos:
 - Parágrafos claros e informativos
 - Inclua as palavras-chave de forma natural
 - Seção de conclusão
+- Use sempre informações atualizadas de ${currentYear}
+- Evite mencionar anos passados como se fossem atuais
 ${ctaSection ? '- Inclua o CTA fornecido no final do post' : ''}
 
 Formato de resposta (JSON):
@@ -40,7 +58,7 @@ Formato de resposta (JSON):
     messages: [
       {
         role: 'system',
-        content: 'Você é um especialista em criação de conteúdo para blogs, SEO e marketing digital. Sempre retorne JSON válido.',
+        content: `Você é um especialista em criação de conteúdo para blogs, SEO e marketing digital. A data atual é ${currentDate} (${currentYear}). Sempre use informações atualizadas e relevantes para ${currentYear}. Sempre retorne JSON válido.`,
       },
       {
         role: 'user',
@@ -52,6 +70,13 @@ Formato de resposta (JSON):
   })
 
   const response = JSON.parse(completion.choices[0].message.content || '{}')
+  
+  // Cores padrão ou personalizadas
+  const ctaPrimaryColor = colors?.cta_primary_color || '#667eea'
+  const ctaSecondaryColor = colors?.cta_secondary_color || '#764ba2'
+  const whatsappColor = colors?.whatsapp_color || '#25D366'
+  const keywordsBgColor = colors?.keywords_bg_color || '#1e3a8a'
+  const keywordsTextColor = colors?.keywords_text_color || '#ffffff'
   
   // Processar CTA se fornecido - formato botão destacado
   // Garantir que o CTA seja sempre inserido no final do conteúdo se fornecido
@@ -68,8 +93,8 @@ Formato de resposta (JSON):
       }
     }
     
-    const ctaHtml = `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; margin: 40px 0; border-radius: 12px; text-align: center; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);">
-      <a href="${validCtaLink}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #ffffff; color: #667eea; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 18px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);">
+    const ctaHtml = `<div style="background: linear-gradient(135deg, ${ctaPrimaryColor} 0%, ${ctaSecondaryColor} 100%); padding: 30px; margin: 40px 0; border-radius: 12px; text-align: center; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);">
+      <a href="${validCtaLink}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #ffffff; color: ${ctaPrimaryColor}; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 18px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);">
         ${ctaText}
       </a>
     </div>`
@@ -104,10 +129,10 @@ Formato de resposta (JSON):
       
       const whatsappLink = `https://wa.me/${cleanPhone}`
       
-      const phoneFooter = `<div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 8px; text-align: center; border-top: 2px solid #667eea;">
+      const phoneFooter = `<div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 8px; text-align: center; border-top: 2px solid ${ctaPrimaryColor};">
         <p style="margin: 0; color: #333; font-size: 16px;">
           <strong>Entre em contato:</strong><br>
-          <a href="${whatsappLink}" target="_blank" rel="noopener noreferrer" style="color: #25D366; text-decoration: none; font-weight: 600;">
+          <a href="${whatsappLink}" target="_blank" rel="noopener noreferrer" style="color: ${whatsappColor}; text-decoration: none; font-weight: 600;">
             📱 WhatsApp: ${formattedPhone}
           </a>
         </p>
@@ -115,6 +140,20 @@ Formato de resposta (JSON):
       
       response.content = response.content + phoneFooter
     }
+  }
+
+  // Adicionar palavras-chave no final do conteúdo se houver
+  if (keywords && keywords.length > 0) {
+    const keywordsHtml = `<div style="margin-top: 40px; padding: 20px 0;">
+      <h3 style="color: #333; font-size: 20px; font-weight: 600; margin-bottom: 15px;">Palavras-chave:</h3>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+        ${keywords.map(keyword => 
+          `<span style="background: ${keywordsBgColor}; color: ${keywordsTextColor}; padding: 8px 16px; border-radius: 20px; font-size: 14px; font-weight: 500; display: inline-block;">${keyword}</span>`
+        ).join('')}
+      </div>
+    </div>`
+    
+    response.content = response.content + keywordsHtml
   }
 
   return {

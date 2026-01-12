@@ -21,6 +21,7 @@ import {
   Spinner,
 } from '@chakra-ui/react'
 import { useToastContext } from '@/contexts/ToastContext'
+import ContentEditor from './ContentEditor'
 
 interface Site {
   id: string
@@ -30,6 +31,11 @@ interface Site {
   cta_text?: string
   cta_link?: string
   phone_number?: string
+  cta_primary_color?: string
+  cta_secondary_color?: string
+  whatsapp_color?: string
+  keywords_bg_color?: string
+  keywords_text_color?: string
 }
 
 export default function PostCreator({ sites }: { sites: Site[] }) {
@@ -62,7 +68,7 @@ export default function PostCreator({ sites }: { sites: Site[] }) {
   const [isSearchingImages, setIsSearchingImages] = useState(false)
   const toast = useToastContext()
 
-  // Atualizar CTA e telefone quando o site selecionado mudar
+  // Atualizar CTA, telefone e cores quando o site selecionado mudar
   useEffect(() => {
     if (selectedSiteId) {
       const selectedSite = sites.find((s) => s.id === selectedSiteId)
@@ -101,11 +107,21 @@ export default function PostCreator({ sites }: { sites: Site[] }) {
     
     try {
       setLoadingMessage('Gerando palavras-chave e conteúdo...')
+      const selectedSite = sites.find((s) => s.id === selectedSiteId)
+      const colors = selectedSite ? {
+        cta_primary_color: selectedSite.cta_primary_color || undefined,
+        cta_secondary_color: selectedSite.cta_secondary_color || undefined,
+        whatsapp_color: selectedSite.whatsapp_color || undefined,
+        keywords_bg_color: selectedSite.keywords_bg_color || undefined,
+        keywords_text_color: selectedSite.keywords_text_color || undefined,
+      } : undefined
+
       const response = await axios.post('/api/generate-keywords-and-content', {
         topic,
         ctaText: ctaText || undefined,
         ctaLink: ctaLink || undefined,
         phoneNumber: phoneNumber || undefined,
+        colors,
       })
       
       if (!response.data) {
@@ -157,12 +173,22 @@ export default function PostCreator({ sites }: { sites: Site[] }) {
     toast.info('Regenerando', 'Gerando novo conteúdo...')
     
     try {
+      const selectedSite = sites.find((s) => s.id === selectedSiteId)
+      const colors = selectedSite ? {
+        cta_primary_color: selectedSite.cta_primary_color || undefined,
+        cta_secondary_color: selectedSite.cta_secondary_color || undefined,
+        whatsapp_color: selectedSite.whatsapp_color || undefined,
+        keywords_bg_color: selectedSite.keywords_bg_color || undefined,
+        keywords_text_color: selectedSite.keywords_text_color || undefined,
+      } : undefined
+
       const response = await axios.post('/api/generate-content', {
         topic,
         keywords,
         ctaText: ctaText || undefined,
         ctaLink: ctaLink || undefined,
         phoneNumber: phoneNumber || undefined,
+        colors,
       })
       
       if (response.data) {
@@ -250,12 +276,22 @@ export default function PostCreator({ sites }: { sites: Site[] }) {
     toast.info('Gerando conteúdo', 'Criando o conteúdo do post...')
     
     try {
+      const selectedSite = sites.find((s) => s.id === selectedSiteId)
+      const colors = selectedSite ? {
+        cta_primary_color: selectedSite.cta_primary_color || undefined,
+        cta_secondary_color: selectedSite.cta_secondary_color || undefined,
+        whatsapp_color: selectedSite.whatsapp_color || undefined,
+        keywords_bg_color: selectedSite.keywords_bg_color || undefined,
+        keywords_text_color: selectedSite.keywords_text_color || undefined,
+      } : undefined
+
       const response = await axios.post('/api/generate-content', {
         topic,
         keywords,
         ctaText: ctaText || undefined,
         ctaLink: ctaLink || undefined,
         phoneNumber: phoneNumber || undefined,
+        colors,
       })
       
       if (response.data) {
@@ -633,27 +669,17 @@ export default function PostCreator({ sites }: { sites: Site[] }) {
                   />
                 </FieldRoot>
 
-                <FieldRoot>
-                  <FieldLabel color="gray.300" fontWeight="medium">
-                    Conteúdo (HTML)
-                  </FieldLabel>
-                  <Textarea
-                    value={editedContent?.content || ''}
-                    onChange={(e) =>
-                      setEditedContent({
-                        ...(editedContent || generatedContent),
-                        content: e.target.value,
-                      })
-                    }
-                    rows={15}
-                    bg="gray.700"
-                    borderColor="gray.600"
-                    color="gray.50"
-                    fontFamily="mono"
-                    fontSize="sm"
-                    _focus={{ borderColor: 'blue.500', bg: 'gray.700' }}
-                  />
-                </FieldRoot>
+                <ContentEditor
+                  value={editedContent?.content || ''}
+                  onChange={(content) =>
+                    setEditedContent({
+                      ...(editedContent || generatedContent),
+                      content,
+                    })
+                  }
+                  label="Conteúdo do Post"
+                  placeholder="Digite ou edite o conteúdo do post aqui..."
+                />
 
                 <FieldRoot>
                   <FieldLabel color="gray.300" fontWeight="medium">
