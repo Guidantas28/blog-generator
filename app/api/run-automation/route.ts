@@ -278,7 +278,18 @@ export async function GET(request: NextRequest) {
 
           // Descriptografar senha
           const { decrypt } = await import('@/lib/encryption')
-          const password = decrypt(siteData.password_encrypted)
+          let password: string
+          try {
+            password = decrypt(siteData.password_encrypted)
+          } catch (error: any) {
+            const { logger } = await import('@/lib/logger')
+            logger.error('Erro ao descriptografar senha do site', error, {
+              endpoint: '/api/run-automation',
+              siteId: automation.site_id,
+              automationId: automation.id,
+            })
+            throw new Error(`Erro ao descriptografar senha: ${error?.message || 'Erro desconhecido'}`)
+          }
           const site = {
             id: siteData.id,
             user_id: siteData.user_id,
