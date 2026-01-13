@@ -32,7 +32,12 @@ export async function generateBlogContent(
 
   const prompt = `Crie um post de blog completo e profissional em português sobre "${topic}".
 
-IMPORTANTE: A data atual é ${currentDate} (${currentYear}). Use sempre informações, dados, estatísticas e referências atualizadas para ${currentYear}. Não use dados ou referências de anos anteriores como 2023 ou 2024, a menos que seja para comparação histórica.
+⚠️ ATENÇÃO CRÍTICA - DATA ATUAL: Estamos em ${currentDate} (${currentYear}).
+- NUNCA mencione 2023, 2024 ou 2025 como se fossem o ano atual
+- Use APENAS dados, estatísticas e informações de ${currentYear}
+- Se precisar mencionar anos anteriores, deixe claro que são dados históricos/comparativos
+- Todas as referências temporais devem ser para ${currentYear}
+- Use expressões como "em ${currentYear}", "atualmente em ${currentYear}", "dados de ${currentYear}"
 
 Palavras-chave para incluir: ${keywordsText}
 
@@ -42,8 +47,8 @@ Requisitos:
 - Parágrafos claros e informativos
 - Inclua as palavras-chave de forma natural
 - Seção de conclusão
-- Use sempre informações atualizadas de ${currentYear}
-- Evite mencionar anos passados como se fossem atuais
+- Use EXCLUSIVAMENTE informações atualizadas de ${currentYear}
+- NUNCA use dados de anos anteriores (2023, 2024, 2025) como se fossem atuais
 ${ctaSection ? '- Inclua o CTA fornecido no final do post' : ''}
 
 Formato de resposta (JSON):
@@ -58,7 +63,17 @@ Formato de resposta (JSON):
     messages: [
       {
         role: 'system',
-        content: `Você é um especialista em criação de conteúdo para blogs, SEO e marketing digital. A data atual é ${currentDate} (${currentYear}). Sempre use informações atualizadas e relevantes para ${currentYear}. Sempre retorne JSON válido.`,
+        content: `Você é um especialista em criação de conteúdo para blogs, SEO e marketing digital. 
+
+⚠️ DATA ATUAL: ${currentDate} (${currentYear})
+
+REGRAS OBRIGATÓRIAS:
+- NUNCA mencione 2023, 2024 ou 2025 como ano atual
+- Use APENAS dados e informações de ${currentYear}
+- Todas as estatísticas, tendências e referências devem ser de ${currentYear}
+- Se mencionar anos anteriores, deixe claro que são dados históricos
+
+Sempre retorne JSON válido.`,
       },
       {
         role: 'user',
@@ -70,6 +85,77 @@ Formato de resposta (JSON):
   })
 
   const response = JSON.parse(completion.choices[0].message.content || '{}')
+  
+  // Validar e corrigir referências a anos antigos no conteúdo gerado
+  if (response.content) {
+    const oldYears = ['2023', '2024', '2025']
+    const currentYearStr = String(currentYear)
+    
+    // Substituir referências a anos antigos que parecem ser o ano atual
+    oldYears.forEach(oldYear => {
+      // Padrões que indicam que o ano está sendo usado como "atual" (mais agressivo)
+      const patterns = [
+        // Padrões temporais comuns
+        new RegExp(`\\b(em|no|de|para|até|durante|ao longo de|em todo|ao longo|até o final de|desde|a partir de)\\s+${oldYear}\\b`, 'gi'),
+        // Padrões com dados/estatísticas
+        new RegExp(`\\b(estatísticas|dados|informações|tendências|previsões|números|resultados|pesquisas|estudos)\\s+(de|do|da|em)\\s+${oldYear}\\b`, 'gi'),
+        // Padrões com verbos temporais
+        new RegExp(`\\b${oldYear}\\s+(é|será|foi|está|estava|seria|seria|representa|mostra|indica)\\b`, 'gi'),
+        // Padrões com "ano"
+        new RegExp(`\\b(ano|anos)\\s+(de|do|da)\\s+${oldYear}\\b`, 'gi'),
+        // Padrões com "em 202X"
+        new RegExp(`\\bem\\s+${oldYear}\\b`, 'gi'),
+      ]
+      
+      patterns.forEach(pattern => {
+        response.content = response.content.replace(pattern, (match: string) => {
+          return match.replace(new RegExp(oldYear, 'g'), currentYearStr)
+        })
+      })
+      
+      // Substituição mais agressiva: qualquer menção isolada de ano antigo (exceto em contexto histórico claro)
+      const historicalContext = /(comparação|histórico|passado|anterior|antes|desde|até|entre|período)/i
+      const isolatedYearPattern = new RegExp(`\\b${oldYear}\\b(?!\\s*(?:a|e|ou|,|;|:|\\.|\\s))`, 'gi')
+      
+      response.content = response.content.replace(isolatedYearPattern, (match: string, offset: number) => {
+        // Verificar contexto antes e depois para ver se é histórico
+        const before = response.content.substring(Math.max(0, offset - 50), offset)
+        const after = response.content.substring(offset, Math.min(response.content.length, offset + 50))
+        const context = before + after
+        
+        // Se não há contexto histórico claro, substituir
+        if (!historicalContext.test(context)) {
+          return currentYearStr
+        }
+        return match
+      })
+    })
+    
+    // Log de aviso se ainda houver anos antigos
+    oldYears.forEach(year => {
+      const regex = new RegExp(`\\b${year}\\b`, 'i')
+      if (regex.test(response.content)) {
+        console.warn(`⚠️ Aviso: Conteúdo ainda contém referência a ${year}. Ano atual: ${currentYear}`)
+      }
+    })
+  }
+  
+  // Validar e corrigir título e excerpt também
+  if (response.title) {
+    const oldYears = ['2023', '2024', '2025']
+    const currentYearStr = String(currentYear)
+    oldYears.forEach(oldYear => {
+      response.title = response.title.replace(new RegExp(`\\b${oldYear}\\b`, 'gi'), currentYearStr)
+    })
+  }
+  
+  if (response.excerpt) {
+    const oldYears = ['2023', '2024', '2025']
+    const currentYearStr = String(currentYear)
+    oldYears.forEach(oldYear => {
+      response.excerpt = response.excerpt.replace(new RegExp(`\\b${oldYear}\\b`, 'gi'), currentYearStr)
+    })
+  }
   
   // Cores padrão ou personalizadas
   const ctaPrimaryColor = colors?.cta_primary_color || '#667eea'

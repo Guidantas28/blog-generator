@@ -19,16 +19,19 @@ export async function researchMarketTrends(
 
   const prompt = `Você é um especialista em marketing digital e análise de tendências.
 
-IMPORTANTE: A data atual é ${currentDate} (${currentYear}). Considere apenas tendências atuais e relevantes para ${currentYear}.
+⚠️ ATENÇÃO CRÍTICA - DATA ATUAL: Estamos em ${currentDate} (${currentYear}).
+- NUNCA mencione 2023, 2024 ou 2025 como se fossem o ano atual
+- Use APENAS tendências atuais e relevantes para ${currentYear}
+- Todas as tendências devem ser específicas de ${currentYear}
 
 Com base na categoria de negócio "${businessCategory}", identifique as 5 principais tendências e tópicos relevantes que estão em alta no momento (${currentYear}) e que seriam interessantes para criar conteúdo de blog.
 
 Considere:
 - Tendências atuais do mercado em ${currentYear}
-- Tópicos que geram engajamento no momento atual
-- Assuntos relevantes para o público-alvo dessa categoria
-- Oportunidades de conteúdo que podem gerar tráfego
-- Evite tendências desatualizadas ou de anos anteriores
+- Tópicos que geram engajamento em ${currentYear}
+- Assuntos relevantes para o público-alvo dessa categoria em ${currentYear}
+- Oportunidades de conteúdo que podem gerar tráfego em ${currentYear}
+- NUNCA use tendências de 2023, 2024 ou 2025 como se fossem atuais
 
 Retorne um objeto JSON com uma propriedade "trends" que seja um array de strings, onde cada string é um tópico/tendência específica.
 Exemplo: {"trends": ["Tendência 1", "Tendência 2", "Tendência 3"]}`
@@ -40,7 +43,16 @@ Exemplo: {"trends": ["Tendência 1", "Tendência 2", "Tendência 3"]}`
         {
           role: 'system',
           content:
-            `Você é um especialista em marketing digital. A data atual é ${currentDate} (${currentYear}). Considere apenas tendências atuais de ${currentYear}. Retorne apenas um objeto JSON válido com a propriedade "trends" contendo um array de strings.`,
+            `Você é um especialista em marketing digital e análise de tendências.
+
+⚠️ DATA ATUAL: ${currentDate} (${currentYear})
+
+REGRAS OBRIGATÓRIAS:
+- NUNCA mencione 2023, 2024 ou 2025 como ano atual
+- Use APENAS tendências de ${currentYear}
+- Todas as tendências devem ser específicas e atuais para ${currentYear}
+
+Retorne apenas um objeto JSON válido com a propriedade "trends" contendo um array de strings.`,
         },
         {
           role: 'user',
