@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import axios from 'axios'
 import DOMPurify from 'isomorphic-dompurify'
 import { ChakraProvider } from '@/components/ChakraProvider'
+import ContentEditor from '@/components/ContentEditor'
 import {
   Box,
   Heading,
@@ -23,6 +24,7 @@ import {
   CardRoot,
   CardBody,
 } from '@chakra-ui/react'
+import { Code, Eye } from 'lucide-react'
 
 interface PendingPost {
   id: string
@@ -54,6 +56,7 @@ export default function ApprovePostPage() {
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [imageUrl, setImageUrl] = useState('')
   const [uploadingImage, setUploadingImage] = useState(false)
+  const [showHtmlEditor, setShowHtmlEditor] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -438,72 +441,48 @@ export default function ApprovePostPage() {
               </FieldRoot>
 
               <FieldRoot>
-                <FieldLabel color="gray.300" fontWeight="medium">
-                  Conteúdo
-                </FieldLabel>
-                <Box
-                  bg="gray.700"
-                  borderWidth="1px"
-                  borderColor="gray.600"
-                  borderRadius="md"
-                  p={4}
-                  minH="300px"
-                  maxH="600px"
-                  overflowY="auto"
-                  color="gray.50"
-                  fontSize="md"
-                  lineHeight="1.6"
-                  dangerouslySetInnerHTML={{
-                    __html: DOMPurify.sanitize(editedContent || '<p>Nenhum conteúdo ainda</p>'),
-                  }}
-                  style={{
-                    // Estilos para elementos HTML renderizados
-                  }}
-                  className="blog-content-preview"
-                />
-                <style dangerouslySetInnerHTML={{
-                  __html: `
-                    .blog-content-preview h1,
-                    .blog-content-preview h2,
-                    .blog-content-preview h3,
-                    .blog-content-preview h4,
-                    .blog-content-preview h5,
-                    .blog-content-preview h6 {
-                      color: #f9fafb;
-                      margin-top: 1em;
-                      margin-bottom: 0.5em;
-                    }
-                    .blog-content-preview p {
-                      margin-bottom: 1em;
-                    }
-                    .blog-content-preview ul,
-                    .blog-content-preview ol {
-                      margin-left: 1.5em;
-                      margin-bottom: 1em;
-                    }
-                    .blog-content-preview img {
-                      max-width: 100%;
-                      height: auto;
-                      border-radius: 8px;
-                    }
-                  `
-                }} />
-                <Textarea
-                  rows={10}
-                  value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
-                  bg="gray.800"
-                  borderColor="gray.600"
-                  color="gray.50"
-                  size="lg"
-                  mt={4}
-                  fontFamily="mono"
-                  fontSize="xs"
-                  placeholder="Edite o HTML aqui se necessário..."
-                />
-                <Text fontSize="xs" color="gray.400" mt={1}>
-                  Visualização acima | Edição HTML abaixo
-                </Text>
+                <HStack justify="space-between" mb={2}>
+                  <FieldLabel color="gray.300" fontWeight="medium" mb={0}>
+                    Conteúdo
+                  </FieldLabel>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowHtmlEditor(!showHtmlEditor)}
+                    colorPalette="gray"
+                    bg={showHtmlEditor ? 'gray.700' : 'transparent'}
+                    borderColor="gray.600"
+                    color="gray.300"
+                    _hover={{ bg: 'gray.700', borderColor: 'gray.500' }}
+                  >
+                    <HStack gap={1.5}>
+                      {showHtmlEditor ? <Eye size={16} /> : <Code size={16} />}
+                      <Text>{showHtmlEditor ? 'Visualizar' : 'Editar HTML'}</Text>
+                    </HStack>
+                  </Button>
+                </HStack>
+                {showHtmlEditor ? (
+                  <Textarea
+                    rows={20}
+                    value={editedContent}
+                    onChange={(e) => setEditedContent(e.target.value)}
+                    bg="gray.800"
+                    borderColor="gray.600"
+                    color="gray.50"
+                    size="lg"
+                    fontFamily="mono"
+                    fontSize="sm"
+                    placeholder="Edite o HTML aqui..."
+                    _focus={{ borderColor: 'blue.500', bg: 'gray.800' }}
+                  />
+                ) : (
+                  <ContentEditor
+                    value={editedContent}
+                    onChange={setEditedContent}
+                    placeholder="Digite o conteúdo aqui..."
+                    label=""
+                  />
+                )}
               </FieldRoot>
 
               <FieldRoot>
@@ -539,10 +518,15 @@ export default function ApprovePostPage() {
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingImage}
                       colorPalette="blue"
-                      variant="outline"
-                      size="sm"
+                      variant="solid"
+                      size="md"
                       loading={uploadingImage}
                       loadingText="Enviando..."
+                      bg="blue.600"
+                      color="white"
+                      _hover={{ bg: 'blue.700' }}
+                      _active={{ bg: 'blue.800' }}
+                      fontWeight="medium"
                     >
                       {imageUrl || post.image_url ? 'Trocar Imagem' : 'Enviar Imagem'}
                     </Button>
@@ -556,8 +540,13 @@ export default function ApprovePostPage() {
                         }}
                         disabled={uploadingImage}
                         colorPalette="red"
-                        variant="ghost"
-                        size="sm"
+                        variant="solid"
+                        size="md"
+                        bg="red.600"
+                        color="white"
+                        _hover={{ bg: 'red.700' }}
+                        _active={{ bg: 'red.800' }}
+                        fontWeight="medium"
                       >
                         Remover
                       </Button>
@@ -569,17 +558,22 @@ export default function ApprovePostPage() {
                 </VStack>
               </FieldRoot>
 
-              <HStack gap={4} mt={4}>
+              <HStack gap={3} mt={6} flexWrap="wrap">
                 <Button
                   onClick={handleSaveEdit}
                   disabled={saving || regenerating || uploadingImage}
                   colorPalette="blue"
-                  flex={1}
+                  flex={{ base: '1', md: '1' }}
+                  minW={{ base: '100%', md: '150px' }}
                   loading={saving}
                   loadingText="Salvando..."
                   bg="blue.600"
                   color="white"
-                  _hover={{ bg: 'blue.700' }}
+                  size="lg"
+                  fontWeight="semibold"
+                  _hover={{ bg: 'blue.700', transform: 'translateY(-1px)', boxShadow: 'lg' }}
+                  _active={{ bg: 'blue.800', transform: 'translateY(0)' }}
+                  transition="all 0.2s"
                 >
                   Salvar Edições
                 </Button>
@@ -587,12 +581,17 @@ export default function ApprovePostPage() {
                   onClick={handleRegenerate}
                   disabled={saving || regenerating || uploadingImage}
                   colorPalette="purple"
-                  flex={1}
+                  flex={{ base: '1', md: '1' }}
+                  minW={{ base: '100%', md: '150px' }}
                   loading={regenerating}
                   loadingText="Regenerando..."
                   bg="purple.600"
                   color="white"
-                  _hover={{ bg: 'purple.700' }}
+                  size="lg"
+                  fontWeight="semibold"
+                  _hover={{ bg: 'purple.700', transform: 'translateY(-1px)', boxShadow: 'lg' }}
+                  _active={{ bg: 'purple.800', transform: 'translateY(0)' }}
+                  transition="all 0.2s"
                 >
                   Regenerar Conteúdo
                 </Button>
@@ -601,9 +600,15 @@ export default function ApprovePostPage() {
                   disabled={saving || regenerating || uploadingImage}
                   colorPalette="red"
                   variant="solid"
+                  flex={{ base: '1', md: '0' }}
+                  minW={{ base: '100%', md: '120px' }}
                   bg="red.600"
                   color="white"
-                  _hover={{ bg: 'red.700' }}
+                  size="lg"
+                  fontWeight="semibold"
+                  _hover={{ bg: 'red.700', transform: 'translateY(-1px)', boxShadow: 'lg' }}
+                  _active={{ bg: 'red.800', transform: 'translateY(0)' }}
+                  transition="all 0.2s"
                 >
                   Rejeitar
                 </Button>
@@ -611,12 +616,17 @@ export default function ApprovePostPage() {
                   onClick={handleApprove}
                   disabled={saving || regenerating || uploadingImage}
                   colorPalette="green"
-                  flex={1}
+                  flex={{ base: '1', md: '1' }}
+                  minW={{ base: '100%', md: '180px' }}
                   loading={saving}
                   loadingText="Aprovando..."
                   bg="green.600"
                   color="white"
-                  _hover={{ bg: 'green.700' }}
+                  size="lg"
+                  fontWeight="semibold"
+                  _hover={{ bg: 'green.700', transform: 'translateY(-1px)', boxShadow: 'lg' }}
+                  _active={{ bg: 'green.800', transform: 'translateY(0)' }}
+                  transition="all 0.2s"
                 >
                   Aprovar e Publicar
                 </Button>
