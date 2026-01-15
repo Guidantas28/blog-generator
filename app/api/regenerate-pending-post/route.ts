@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', pendingPostId)
-      .select()
+      .select('*, wordpress_sites(name, url)')
       .single()
 
     if (updateError) {

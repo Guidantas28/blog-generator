@@ -204,7 +204,12 @@ export default function ApprovePostPage() {
       })
 
       if (response.data.post) {
-        setPost(response.data.post)
+        // Manter wordpress_sites do post original se não vier na resposta
+        const updatedPost = {
+          ...response.data.post,
+          wordpress_sites: response.data.post.wordpress_sites || post?.wordpress_sites,
+        }
+        setPost(updatedPost)
         setEditedContent(response.data.post.content)
         setEditedTitle(response.data.post.title)
         setEditedExcerpt(response.data.post.excerpt || '')
@@ -363,7 +368,7 @@ export default function ApprovePostPage() {
             Aprovação de Post
           </Heading>
           <Text color="gray.400">
-            Site: {post.wordpress_sites.name} | Publicação agendada: {scheduledDate}
+            Site: {post.wordpress_sites?.name || 'N/A'} | Publicação agendada: {scheduledDate}
           </Text>
         </Box>
 
