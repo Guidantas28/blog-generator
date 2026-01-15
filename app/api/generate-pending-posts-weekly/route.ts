@@ -116,6 +116,11 @@ function getPublicationDate(): Date {
 
 async function handleGeneratePendingPosts(request: NextRequest) {
   try {
+    logger.info('Iniciando geração de posts pendentes semanais', {
+      endpoint: '/api/generate-pending-posts-weekly',
+      timestamp: new Date().toISOString(),
+    })
+
     // Verificar se há uma chave secreta para proteger a rota
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET
@@ -125,22 +130,46 @@ async function handleGeneratePendingPosts(request: NextRequest) {
         endpoint: '/api/generate-pending-posts-weekly',
         hasAuthHeader: !!authHeader,
         hasCronSecret: !!cronSecret,
+        authHeaderPrefix: authHeader?.substring(0, 10),
       })
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
     // Verificar variáveis de ambiente necessárias
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      logger.error('NEXT_PUBLIC_SUPABASE_URL não configurada', {
+        endpoint: '/api/generate-pending-posts-weekly',
+      })
+      return NextResponse.json(
+        { error: 'Configuração do servidor incompleta: NEXT_PUBLIC_SUPABASE_URL' },
+        { status: 500 }
+      )
+    }
+
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       logger.error('SUPABASE_SERVICE_ROLE_KEY não configurada', {
         endpoint: '/api/generate-pending-posts-weekly',
       })
       return NextResponse.json(
-        { error: 'Configuração do servidor incompleta' },
+        { error: 'Configuração do servidor incompleta: SUPABASE_SERVICE_ROLE_KEY' },
         { status: 500 }
       )
     }
 
-    const supabase = getServiceRoleClient()
+    let supabase
+    try {
+      supabase = getServiceRoleClient()
+      logger.info('Cliente Supabase service role criado com sucesso')
+    } catch (supabaseError: any) {
+      logger.error('Erro ao criar cliente Supabase', supabaseError, {
+        endpoint: '/api/generate-pending-posts-weekly',
+        errorMessage: supabaseError.message,
+      })
+      return NextResponse.json(
+        { error: `Erro ao conectar ao banco de dados: ${supabaseError.message}` },
+        { status: 500 }
+      )
+    }
 
     // Verificar se hoje é domingo (só deve executar aos domingos)
     const today = new Date()
@@ -158,6 +187,8 @@ async function handleGeneratePendingPosts(request: NextRequest) {
     const targetDate = publicationDate.toISOString().split('T')[0] // YYYY-MM-DD
 
     // Buscar automações ativas que precisam gerar posts E que requerem aprovação
+    logger.info('Buscando automações ativas com aprovação habilitada')
+    
     const { data: automations, error: fetchError } = await supabase
       .from('automation_settings')
       .select('*, wordpress_sites(*)')
@@ -167,14 +198,23 @@ async function handleGeneratePendingPosts(request: NextRequest) {
     if (fetchError) {
       logger.error('Erro ao buscar automações', fetchError, {
         endpoint: '/api/generate-pending-posts-weekly',
+        errorCode: fetchError.code,
+        errorMessage: fetchError.message,
+        errorDetails: fetchError.details,
       })
       return NextResponse.json(
-        { error: 'Erro ao buscar automações' },
+        { 
+          error: 'Erro ao buscar automações',
+          details: fetchError.message,
+        },
         { status: 500 }
       )
     }
 
+    logger.info(`Encontradas ${automations?.length || 0} automações com aprovação habilitada`)
+
     if (!automations || automations.length === 0) {
+      logger.info('Nenhuma automação encontrada, retornando sucesso vazio')
       return NextResponse.json({
         message: 'Nenhuma automação ativa com aprovação habilitada encontrada',
         processed: 0,
