@@ -116,10 +116,12 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Buscar todas as automações ativas
-    const { data: automations, error: automationsError } = await supabase
+    // Buscar todas as automações ativas que NÃO requerem aprovação
+    // Automações com requires_approval = true são gerenciadas pelo sistema semanal de aprovação
+    const { data: allAutomations, error: automationsError } = await supabase
       .from('automation_settings')
       .select('*')
+      .eq('is_active', true)
 
     if (automationsError) {
       console.error('Erro ao buscar automações:', automationsError)
@@ -132,7 +134,12 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log(`Encontradas ${automations?.length || 0} automação(ões) no banco de dados`)
+    // Filtrar automações que NÃO requerem aprovação (client-side filter)
+    const automations = (allAutomations || []).filter(
+      (auto) => !auto.requires_approval || auto.requires_approval === false
+    )
+
+    console.log(`Encontradas ${automations?.length || 0} automação(ões) sem aprovação no banco de dados`)
 
     if (!automations || automations.length === 0) {
       return NextResponse.json({

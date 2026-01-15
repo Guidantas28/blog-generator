@@ -2,8 +2,8 @@ name: Publish Scheduled Posts
 
 on:
   schedule:
-    # Executa a cada 5 minutos
-    - cron: '*/5 * * * *'
+    # Executa a cada hora para publicar posts agendados e aprovados
+    - cron: '0 * * * *'
   workflow_dispatch: # Permite execução manual
 
 jobs:
@@ -12,10 +12,17 @@ jobs:
     steps:
       - name: Publish Scheduled Posts
         run: |
+          echo "Publicando posts agendados..."
           curl -X GET "${{ secrets.APP_URL }}/api/publish-scheduled-post" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" \
-            -f || exit 1
+            -f || echo "Nenhum post agendado para publicar"
+          
+          echo "Publicando posts aprovados..."
+          curl -X GET "${{ secrets.APP_URL }}/api/publish-approved-posts" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -f || echo "Nenhum post aprovado para publicar"
         env:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}

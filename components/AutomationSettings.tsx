@@ -20,6 +20,7 @@ import {
   CardBody,
   Badge,
   Spinner,
+  Switch,
 } from '@chakra-ui/react'
 
 interface AutomationSetting {
@@ -30,6 +31,8 @@ interface AutomationSetting {
   frequency: 'weekly' | 'biweekly' | 'monthly'
   selected_days?: number[]
   site_name?: string
+  requires_approval?: boolean
+  approval_email?: string
   created_at: string
 }
 
@@ -55,6 +58,8 @@ export default function AutomationSettings({ userId }: { userId: string }) {
     days_per_week: 1,
     frequency: 'weekly' as 'weekly' | 'biweekly' | 'monthly',
     selected_days: [] as number[],
+    requires_approval: false,
+    approval_email: '',
   })
 
   const daysOfWeek = [
@@ -126,6 +131,24 @@ export default function AutomationSettings({ userId }: { userId: string }) {
       return
     }
 
+    // Validar email se aprovação estiver ativada
+    if (formData.requires_approval && !formData.approval_email?.trim()) {
+      setMessage({ 
+        type: 'error', 
+        text: 'Email de aprovação é obrigatório quando a aprovação está ativada' 
+      })
+      return
+    }
+
+    // Validar formato do email se fornecido
+    if (formData.approval_email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.approval_email.trim())) {
+      setMessage({ 
+        type: 'error', 
+        text: 'Email inválido' 
+      })
+      return
+    }
+
     setSaving(true)
     setMessage(null)
 
@@ -147,6 +170,10 @@ export default function AutomationSettings({ userId }: { userId: string }) {
         days_per_week: formData.days_per_week,
         frequency: formData.frequency,
         selected_days: formData.selected_days,
+        requires_approval: formData.requires_approval,
+        approval_email: formData.requires_approval && formData.approval_email?.trim() 
+          ? formData.approval_email.trim() 
+          : null,
         updated_at: new Date().toISOString(),
       }
 
@@ -173,6 +200,8 @@ export default function AutomationSettings({ userId }: { userId: string }) {
         days_per_week: 1,
         frequency: 'weekly',
         selected_days: [],
+        requires_approval: false,
+        approval_email: '',
       })
       setShowForm(false)
       setEditingId(null)
@@ -195,6 +224,8 @@ export default function AutomationSettings({ userId }: { userId: string }) {
       days_per_week: automation.days_per_week,
       frequency: automation.frequency,
       selected_days: automation.selected_days || [],
+      requires_approval: automation.requires_approval || false,
+      approval_email: automation.approval_email || '',
     })
     setEditingId(automation.id)
     setShowForm(true)
@@ -301,6 +332,8 @@ export default function AutomationSettings({ userId }: { userId: string }) {
                   days_per_week: 1,
                   frequency: 'weekly',
                   selected_days: [],
+                  requires_approval: false,
+                  approval_email: '',
                 })
               }}
               colorPalette="blue"
@@ -515,6 +548,66 @@ export default function AutomationSettings({ userId }: { userId: string }) {
                 </Text>
               </FieldRoot>
 
+              <Box
+                p={4}
+                bg="gray.600"
+                borderRadius="lg"
+                borderWidth="1px"
+                borderColor="gray.500"
+              >
+                <Heading size="sm" color="gray.200" mb={4}>
+                  Aprovação de Posts (Opcional)
+                </Heading>
+                
+                <VStack gap={4} align="stretch">
+                  <HStack justify="space-between" align="center">
+                    <Box flex={1}>
+                      <FieldLabel color="gray.300" fontWeight="medium" mb={1}>
+                        Requer Aprovação Antes de Publicar
+                      </FieldLabel>
+                      <Text fontSize="xs" color="gray.400">
+                        Se ativado, posts serão gerados uma semana antes e enviados por email para aprovação
+                      </Text>
+                    </Box>
+                    <Switch
+                      checked={formData.requires_approval}
+                      onCheckedChange={(checked) =>
+                        setFormData({ ...formData, requires_approval: checked })
+                      }
+                      colorPalette="blue"
+                      size="lg"
+                    />
+                  </HStack>
+
+                  {formData.requires_approval && (
+                    <FieldRoot>
+                      <FieldLabel color="gray.300" fontWeight="medium" mb={2}>
+                        Email para Aprovação
+                      </FieldLabel>
+                      <Input
+                        type="email"
+                        value={formData.approval_email}
+                        onChange={(e) =>
+                          setFormData({ ...formData, approval_email: e.target.value })
+                        }
+                        placeholder="exemplo@email.com"
+                        bg="gray.500"
+                        borderColor="gray.400"
+                        color="gray.50"
+                        size="lg"
+                        px={4}
+                        py={3}
+                        _placeholder={{ color: 'gray.400' }}
+                        _focus={{ borderColor: 'blue.500', bg: 'gray.500', boxShadow: '0 0 0 1px blue.500' }}
+                      />
+                      <Text fontSize="xs" color="gray.400" mt={1}>
+                        Email que receberá os links de aprovação dos posts (via n8n ou sistema de email)
+                      </Text>
+                    </FieldRoot>
+                  )}
+                </VStack>
+              </Box>
+
               <HStack gap={4}>
                 <Button
                   onClick={handleCancel}
@@ -560,9 +653,16 @@ export default function AutomationSettings({ userId }: { userId: string }) {
               {automations.map((automation) => (
                 <CardRoot key={automation.id} bg="gray.700" borderWidth="1px" borderColor="gray.600">
                   <CardBody>
-                    <Heading size="md" color="gray.50" mb={2}>
-                      {automation.site_name}
-                    </Heading>
+                    <HStack justify="space-between" align="start" mb={2}>
+                      <Heading size="md" color="gray.50">
+                        {automation.site_name}
+                      </Heading>
+                      {automation.requires_approval && (
+                        <Badge colorPalette="blue" size="sm">
+                          Requer Aprovação
+                        </Badge>
+                      )}
+                    </HStack>
                     <Text fontSize="sm" color="gray.400" mb={1}>
                       <Text as="span" fontWeight="medium" color="gray.300">
                         Categoria:
@@ -587,7 +687,7 @@ export default function AutomationSettings({ userId }: { userId: string }) {
                           .join(', ')}
                       </Text>
                     )}
-                    <Text fontSize="sm" color="gray.400" mb={4}>
+                    <Text fontSize="sm" color="gray.400" mb={1}>
                       <Text as="span" fontWeight="medium" color="gray.300">
                         Frequência:
                       </Text>{' '}
@@ -595,6 +695,14 @@ export default function AutomationSettings({ userId }: { userId: string }) {
                         {getFrequencyLabel(automation.frequency)}
                       </Badge>
                     </Text>
+                    {automation.requires_approval && automation.approval_email && (
+                      <Text fontSize="sm" color="gray.400" mb={4}>
+                        <Text as="span" fontWeight="medium" color="gray.300">
+                          Email aprovação:
+                        </Text>{' '}
+                        {automation.approval_email}
+                      </Text>
+                    )}
                     <HStack gap={2}>
                       <Button
                         onClick={() => handleEdit(automation)}
