@@ -121,7 +121,23 @@ async function handleGeneratePendingPosts(request: NextRequest) {
     const cronSecret = process.env.CRON_SECRET
 
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+      logger.warn('Tentativa de acesso não autorizado', {
+        endpoint: '/api/generate-pending-posts-weekly',
+        hasAuthHeader: !!authHeader,
+        hasCronSecret: !!cronSecret,
+      })
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+    }
+
+    // Verificar variáveis de ambiente necessárias
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      logger.error('SUPABASE_SERVICE_ROLE_KEY não configurada', {
+        endpoint: '/api/generate-pending-posts-weekly',
+      })
+      return NextResponse.json(
+        { error: 'Configuração do servidor incompleta' },
+        { status: 500 }
+      )
     }
 
     const supabase = getServiceRoleClient()
@@ -210,16 +226,34 @@ async function handleGeneratePendingPosts(request: NextRequest) {
           ? `https://${process.env.VERCEL_URL}` 
           : 'http://localhost:3000'
         
+        // Verificar se temos dados do site
+        const siteData = Array.isArray(automation.wordpress_sites) 
+          ? automation.wordpress_sites[0] 
+          : automation.wordpress_sites
+        
+        if (!siteData || !siteData.user_id) {
+          logger.error('Dados do site não encontrados', {
+            automationId: automation.id,
+            siteId: automation.site_id,
+          })
+          throw new Error('Dados do site não encontrados')
+        }
+        
         try {
+          logger.info('Chamando API de geração de posts', {
+            baseUrl,
+            siteId: automation.site_id,
+            userId: siteData.user_id,
+            targetDate,
+          })
+          
           const response = await fetch(`${baseUrl}/api/generate-pending-posts`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               // Para chamadas internas, podemos usar um header especial
               'X-Internal-Request': 'true',
-              'X-User-Id': Array.isArray(automation.wordpress_sites) 
-                ? automation.wordpress_sites[0]?.user_id 
-                : (automation.wordpress_sites as any)?.user_id,
+              'X-User-Id': siteData.user_id,
             },
             body: JSON.stringify({
               siteId: automation.site_id,
@@ -229,8 +263,20 @@ async function handleGeneratePendingPosts(request: NextRequest) {
           })
 
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-            throw new Error(errorData.error || 'Erro ao gerar posts')
+            const errorText = await response.text()
+            let errorData
+            try {
+              errorData = JSON.parse(errorText)
+            } catch {
+              errorData = { error: errorText || 'Erro desconhecido' }
+            }
+            logger.error('Erro ao gerar posts via API', {
+              status: response.status,
+              statusText: response.statusText,
+              error: errorData,
+              siteId: automation.site_id,
+            })
+            throw new Error(errorData.error || `Erro HTTP ${response.status}: ${response.statusText}`)
           }
 
           const data = await response.json()
@@ -244,25 +290,28 @@ async function handleGeneratePendingPosts(request: NextRequest) {
 
           // Enviar webhook de aprovação se houver email configurado e posts gerados
           if (automation.approval_email && data.posts && data.posts.length > 0) {
-            const postsWithUrls = data.posts.map((post: any) => ({
-              id: post.id,
-              title: post.title,
-              approvalToken: post.approvalToken,
-              approvalUrl: `${baseUrl}/approve/${post.approvalToken}`,
-            }))
+            try {
+              const postsWithUrls = data.posts.map((post: any) => ({
+                id: post.id,
+                title: post.title,
+                approvalToken: post.approvalToken,
+                approvalUrl: `${baseUrl}/approve/${post.approvalToken}`,
+              }))
 
-            // wordpress_sites pode ser um objeto ou array dependendo da query
-            const siteData = Array.isArray(automation.wordpress_sites) 
-              ? automation.wordpress_sites[0] 
-              : automation.wordpress_sites
-
-            await sendApprovalEmailWebhook({
-              siteName: siteData?.name || 'Site desconhecido',
-              siteUrl: siteData?.url || '',
-              approvalEmail: automation.approval_email,
-              publicationDate: targetDate,
-              posts: postsWithUrls,
-            })
+              await sendApprovalEmailWebhook({
+                siteName: siteData?.name || 'Site desconhecido',
+                siteUrl: siteData?.url || '',
+                approvalEmail: automation.approval_email,
+                publicationDate: targetDate,
+                posts: postsWithUrls,
+              })
+            } catch (webhookError: any) {
+              // Não falhar a geração se o webhook falhar
+              logger.warn('Erro ao enviar webhook de aprovação', {
+                error: webhookError.message,
+                siteId: automation.site_id,
+              })
+            }
           }
         } catch (fetchError: any) {
           // Se a chamada HTTP falhar (ex: em desenvolvimento), logar mas continuar
@@ -293,12 +342,16 @@ async function handleGeneratePendingPosts(request: NextRequest) {
   } catch (error: any) {
     logger.error('Erro ao processar geração de posts pendentes', error, {
       endpoint: '/api/generate-pending-posts-weekly',
+      errorMessage: error.message,
+      errorStack: error.stack,
     })
     
     return NextResponse.json(
       {
         error: error.message || 'Erro ao processar geração de posts',
-        ...(process.env.NODE_ENV === 'development' && { stack: error.stack }),
+        details: process.env.NODE_ENV === 'development' 
+          ? { stack: error.stack, message: error.message }
+          : undefined,
       },
       { status: 500 }
     )
