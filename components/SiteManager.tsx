@@ -10,6 +10,7 @@ import {
   FieldRoot,
   FieldLabel,
   Input,
+  Textarea,
   AlertRoot,
   AlertIndicator,
   AlertContent,
@@ -35,6 +36,12 @@ interface WordPressSite {
   whatsapp_color?: string
   keywords_bg_color?: string
   keywords_text_color?: string
+  system_prompt?: string
+  content_prompt_template?: string
+  tone?: string
+  writing_style?: string
+  target_audience?: string
+  additional_instructions?: string
 }
 
 interface SiteManagerProps {
@@ -51,6 +58,12 @@ interface SiteManagerProps {
     whatsapp_color?: string
     keywords_bg_color?: string
     keywords_text_color?: string
+    system_prompt?: string
+    content_prompt_template?: string
+    tone?: string
+    writing_style?: string
+    target_audience?: string
+    additional_instructions?: string
   }>
   onSitesChange: () => void
   userId: string
@@ -72,6 +85,12 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
     whatsapp_color: '#25D366',
     keywords_bg_color: '#1e3a8a',
     keywords_text_color: '#ffffff',
+    system_prompt: '',
+    content_prompt_template: '',
+    tone: 'profissional',
+    writing_style: 'informativo',
+    target_audience: '',
+    additional_instructions: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -90,6 +109,13 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
       return
     }
 
+    // Validar limite antes de tentar inserir
+    if (!editingId && sites.length >= 10) {
+      setError('Limite de 10 sites por usuário atingido')
+      setLoading(false)
+      return
+    }
+
     try {
       const siteData: any = {
         name: formData.name,
@@ -103,6 +129,12 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
         whatsapp_color: formData.whatsapp_color?.trim() || null,
         keywords_bg_color: formData.keywords_bg_color?.trim() || null,
         keywords_text_color: formData.keywords_text_color?.trim() || null,
+        system_prompt: formData.system_prompt?.trim() || null,
+        content_prompt_template: formData.content_prompt_template?.trim() || null,
+        tone: formData.tone?.trim() || null,
+        writing_style: formData.writing_style?.trim() || null,
+        target_audience: formData.target_audience?.trim() || null,
+        additional_instructions: formData.additional_instructions?.trim() || null,
       }
 
       // Só atualizar senha se foi fornecida (ou se for criação)
@@ -155,12 +187,24 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
         whatsapp_color: '#25D366',
         keywords_bg_color: '#1e3a8a',
         keywords_text_color: '#ffffff',
+        system_prompt: '',
+        content_prompt_template: '',
+        tone: 'profissional',
+        writing_style: 'informativo',
+        target_audience: '',
+        additional_instructions: '',
       })
       setShowForm(false)
       setEditingId(null)
       onSitesChange()
     } catch (err: any) {
-      setError(err.message || 'Erro ao salvar site')
+      // Tratar erros específicos de limite do banco de dados
+      const errorMessage = err.message || 'Erro ao salvar site'
+      if (errorMessage.includes('limite') || errorMessage.includes('limit') || errorMessage.includes('3 sites')) {
+        setError('Limite de 10 sites por usuário atingido')
+      } else {
+        setError(errorMessage)
+      }
     } finally {
       setLoading(false)
     }
@@ -179,6 +223,12 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
     whatsapp_color?: string
     keywords_bg_color?: string
     keywords_text_color?: string
+    system_prompt?: string
+    content_prompt_template?: string
+    tone?: string
+    writing_style?: string
+    target_audience?: string
+    additional_instructions?: string
   }) => {
     // Buscar a senha não é possível (está encriptada), então deixamos vazio
     setFormData({
@@ -194,6 +244,12 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
       whatsapp_color: site.whatsapp_color || '#25D366',
       keywords_bg_color: site.keywords_bg_color || '#1e3a8a',
       keywords_text_color: site.keywords_text_color || '#ffffff',
+      system_prompt: site.system_prompt || '',
+      content_prompt_template: site.content_prompt_template || '',
+      tone: site.tone || 'profissional',
+      writing_style: site.writing_style || 'informativo',
+      target_audience: site.target_audience || '',
+      additional_instructions: site.additional_instructions || '',
     })
     setEditingId(site.id)
     setShowForm(true)
@@ -201,7 +257,26 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
   }
 
   const handleCancel = () => {
-    setFormData({ name: '', url: '', username: '', password: '', cta_text: '', cta_link: '', phone_number: '' })
+    setFormData({ 
+      name: '', 
+      url: '', 
+      username: '', 
+      password: '', 
+      cta_text: '', 
+      cta_link: '', 
+      phone_number: '',
+      cta_primary_color: '#667eea',
+      cta_secondary_color: '#764ba2',
+      whatsapp_color: '#25D366',
+      keywords_bg_color: '#1e3a8a',
+      keywords_text_color: '#ffffff',
+      system_prompt: '',
+      content_prompt_template: '',
+      tone: 'profissional',
+      writing_style: 'informativo',
+      target_audience: '',
+      additional_instructions: '',
+    })
     setShowForm(false)
     setEditingId(null)
     setError(null)
@@ -598,6 +673,153 @@ export default function SiteManager({ sites, onSitesChange, userId }: SiteManage
                     </Text>
                   </FieldRoot>
                 </SimpleGrid>
+
+                <Heading size="sm" color="gray.200" mt={6} mb={2}>
+                  Configuração do Agente de IA (opcional)
+                </Heading>
+                <Text fontSize="xs" color="gray.400" mb={4}>
+                  Personalize como o agente de IA gera conteúdo para este site
+                </Text>
+
+                <FieldRoot>
+                  <FieldLabel color="gray.300" fontWeight="medium">
+                    Prompt do Sistema
+                  </FieldLabel>
+                  <Textarea
+                    rows={4}
+                    value={formData.system_prompt || ''}
+                    onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
+                    placeholder="Ex: Você é um especialista em marketing digital focado em pequenas empresas..."
+                    bg="gray.600"
+                    borderColor="gray.500"
+                    color="gray.50"
+                    size="lg"
+                    px={4}
+                    py={3}
+                    _placeholder={{ color: 'gray.400' }}
+                    _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
+                  />
+                  <Text fontSize="xs" color="gray.400" mt={1}>
+                    Define o papel e comportamento do agente. Deixe vazio para usar o padrão.
+                  </Text>
+                </FieldRoot>
+
+                <FieldRoot>
+                  <FieldLabel color="gray.300" fontWeight="medium">
+                    Template do Prompt de Conteúdo
+                  </FieldLabel>
+                  <Textarea
+                    rows={6}
+                    value={formData.content_prompt_template || ''}
+                    onChange={(e) => setFormData({ ...formData, content_prompt_template: e.target.value })}
+                    placeholder={`Ex: Crie um post sobre "{topic}" incluindo as palavras-chave: {keywords}...\n\nVariáveis disponíveis: {topic}, {keywords}, {currentYear}, {currentDate}, {ctaSection}`}
+                    bg="gray.600"
+                    borderColor="gray.500"
+                    color="gray.50"
+                    size="lg"
+                    px={4}
+                    py={3}
+                    _placeholder={{ color: 'gray.400' }}
+                    _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
+                  />
+                  <Text fontSize="xs" color="gray.400" mt={1}>
+                    Template personalizado para geração de conteúdo. Use variáveis: {"{topic}"}, {"{keywords}"}, {"{currentYear}"}, {"{currentDate}"}, {"{ctaSection}"}
+                  </Text>
+                </FieldRoot>
+
+                <SimpleGrid columns={{ base: 1, md: 2 }} gap={4}>
+                  <FieldRoot>
+                    <FieldLabel color="gray.300" fontWeight="medium">
+                      Tom de Voz
+                    </FieldLabel>
+                    <Input
+                      type="text"
+                      value={formData.tone || 'profissional'}
+                      onChange={(e) => setFormData({ ...formData, tone: e.target.value })}
+                      placeholder="Ex: formal, casual, técnico, amigável"
+                      bg="gray.600"
+                      borderColor="gray.500"
+                      color="gray.50"
+                      size="lg"
+                      px={4}
+                      py={3}
+                      _placeholder={{ color: 'gray.400' }}
+                      _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
+                    />
+                    <Text fontSize="xs" color="gray.400" mt={1}>
+                      Tom de voz do conteúdo (ex: formal, casual, técnico, amigável)
+                    </Text>
+                  </FieldRoot>
+
+                  <FieldRoot>
+                    <FieldLabel color="gray.300" fontWeight="medium">
+                      Estilo de Escrita
+                    </FieldLabel>
+                    <Input
+                      type="text"
+                      value={formData.writing_style || 'informativo'}
+                      onChange={(e) => setFormData({ ...formData, writing_style: e.target.value })}
+                      placeholder="Ex: informativo, persuasivo, educativo"
+                      bg="gray.600"
+                      borderColor="gray.500"
+                      color="gray.50"
+                      size="lg"
+                      px={4}
+                      py={3}
+                      _placeholder={{ color: 'gray.400' }}
+                      _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
+                    />
+                    <Text fontSize="xs" color="gray.400" mt={1}>
+                      Estilo de escrita (ex: informativo, persuasivo, educativo)
+                    </Text>
+                  </FieldRoot>
+
+                  <FieldRoot>
+                    <FieldLabel color="gray.300" fontWeight="medium">
+                      Público-Alvo
+                    </FieldLabel>
+                    <Input
+                      type="text"
+                      value={formData.target_audience || ''}
+                      onChange={(e) => setFormData({ ...formData, target_audience: e.target.value })}
+                      placeholder="Ex: iniciantes, profissionais, empresas"
+                      bg="gray.600"
+                      borderColor="gray.500"
+                      color="gray.50"
+                      size="lg"
+                      px={4}
+                      py={3}
+                      _placeholder={{ color: 'gray.400' }}
+                      _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
+                    />
+                    <Text fontSize="xs" color="gray.400" mt={1}>
+                      Público-alvo do conteúdo (ex: iniciantes, profissionais, empresas)
+                    </Text>
+                  </FieldRoot>
+                </SimpleGrid>
+
+                <FieldRoot>
+                  <FieldLabel color="gray.300" fontWeight="medium">
+                    Instruções Adicionais
+                  </FieldLabel>
+                  <Textarea
+                    rows={3}
+                    value={formData.additional_instructions || ''}
+                    onChange={(e) => setFormData({ ...formData, additional_instructions: e.target.value })}
+                    placeholder="Ex: Sempre inclua exemplos práticos, evite jargões técnicos..."
+                    bg="gray.600"
+                    borderColor="gray.500"
+                    color="gray.50"
+                    size="lg"
+                    px={4}
+                    py={3}
+                    _placeholder={{ color: 'gray.400' }}
+                    _focus={{ borderColor: 'blue.500', bg: 'gray.600' }}
+                  />
+                  <Text fontSize="xs" color="gray.400" mt={1}>
+                    Instruções específicas adicionais para o agente de IA
+                  </Text>
+                </FieldRoot>
 
                 {error && (
                   <AlertRoot status="error" borderRadius="md" bg="red.900" color="red.100">

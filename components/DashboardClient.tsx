@@ -87,7 +87,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
     try {
       const { data, error } = await supabase
         .from('wordpress_sites')
-        .select('id, name, url, username, cta_text, cta_link, phone_number, cta_primary_color, cta_secondary_color, whatsapp_color, keywords_bg_color, keywords_text_color')
+        .select('id, name, url, username, cta_text, cta_link, phone_number, cta_primary_color, cta_secondary_color, whatsapp_color, keywords_bg_color, keywords_text_color, system_prompt, content_prompt_template, tone, writing_style, target_audience, additional_instructions')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
 

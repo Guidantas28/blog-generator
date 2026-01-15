@@ -349,7 +349,7 @@ export async function GET(request: NextRequest) {
           const keywords = await generateKeywords(selectedTrend)
           const keywordsArray = Array.isArray(keywords) ? keywords : []
 
-          // 6. Obter CTA, telefone e cores do site
+          // 6. Obter CTA, telefone, cores e configurações do agente do site
           const ctaText = siteData.cta_text || undefined
           const ctaLink = siteData.cta_link || undefined
           const phoneNumber = siteData.phone_number || undefined
@@ -360,8 +360,18 @@ export async function GET(request: NextRequest) {
             keywords_bg_color: siteData.keywords_bg_color || undefined,
             keywords_text_color: siteData.keywords_text_color || undefined,
           }
+          
+          // Configurações do agente
+          const agentConfig = {
+            system_prompt: siteData.system_prompt || undefined,
+            content_prompt_template: siteData.content_prompt_template || undefined,
+            tone: siteData.tone || undefined,
+            writing_style: siteData.writing_style || undefined,
+            target_audience: siteData.target_audience || undefined,
+            additional_instructions: siteData.additional_instructions || undefined,
+          }
 
-          // 7. Gerar conteúdo com CTA, telefone e cores do site
+          // 7. Gerar conteúdo com CTA, telefone, cores e configurações do agente do site
           await updateStep('Gerando conteúdo do blog')
           const content = await generateBlogContent(
             selectedTrend,
@@ -369,7 +379,8 @@ export async function GET(request: NextRequest) {
             ctaText,
             ctaLink,
             phoneNumber,
-            colors
+            colors,
+            agentConfig
           )
 
           // 8. Verificar duplicata no título gerado também

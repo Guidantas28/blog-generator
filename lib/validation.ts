@@ -59,6 +59,7 @@ export const generateContentSchema = z.object({
     .array(z.string().min(1).max(100))
     .min(1, 'Pelo menos uma palavra-chave é necessária')
     .max(20, 'Muitas palavras-chave'),
+  siteId: z.string().uuid('ID do site inválido').optional().nullable(),
   ctaText: z.string().max(200).optional().nullable(),
   ctaLink: z.string().url().optional().nullable(),
   phoneNumber: z

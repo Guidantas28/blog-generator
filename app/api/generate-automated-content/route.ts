@@ -66,10 +66,10 @@ export async function POST(request: NextRequest) {
       category: businessCategory,
     })
 
-    // Buscar dados do site para obter CTA, telefone e cores
+    // Buscar dados do site para obter CTA, telefone, cores e configurações do agente
     const { data: siteData, error: siteError } = await supabase
       .from('wordpress_sites')
-      .select('cta_text, cta_link, phone_number, cta_primary_color, cta_secondary_color, whatsapp_color, keywords_bg_color, keywords_text_color')
+      .select('cta_text, cta_link, phone_number, cta_primary_color, cta_secondary_color, whatsapp_color, keywords_bg_color, keywords_text_color, system_prompt, content_prompt_template, tone, writing_style, target_audience, additional_instructions')
       .eq('id', siteId)
       .eq('user_id', session.user.id)
       .single()
@@ -83,6 +83,16 @@ export async function POST(request: NextRequest) {
       whatsapp_color: siteData.whatsapp_color || undefined,
       keywords_bg_color: siteData.keywords_bg_color || undefined,
       keywords_text_color: siteData.keywords_text_color || undefined,
+    } : undefined
+    
+    // Configurações do agente
+    const agentConfig = siteData ? {
+      system_prompt: siteData.system_prompt || undefined,
+      content_prompt_template: siteData.content_prompt_template || undefined,
+      tone: siteData.tone || undefined,
+      writing_style: siteData.writing_style || undefined,
+      target_audience: siteData.target_audience || undefined,
+      additional_instructions: siteData.additional_instructions || undefined,
     } : undefined
 
     // 1. Pesquisar tendências do mercado
@@ -145,14 +155,15 @@ export async function POST(request: NextRequest) {
     const keywords = await generateKeywords(selectedTrend)
     const keywordsArray = Array.isArray(keywords) ? keywords : []
 
-    // 5. Gerar conteúdo do blog com CTA, telefone e cores do site
+    // 5. Gerar conteúdo do blog com CTA, telefone, cores e configurações do agente do site
     const content = await generateBlogContent(
       selectedTrend,
       keywordsArray,
       ctaText,
       ctaLink,
       phoneNumber,
-      colors
+      colors,
+      agentConfig
     )
     
     // 6. Verificar duplicata no título gerado também

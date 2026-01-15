@@ -288,6 +288,7 @@ export default function PostCreator({ sites }: { sites: Site[] }) {
       const response = await axios.post('/api/generate-content', {
         topic,
         keywords,
+        siteId: selectedSiteId,
         ctaText: ctaText || undefined,
         ctaLink: ctaLink || undefined,
         phoneNumber: phoneNumber || undefined,

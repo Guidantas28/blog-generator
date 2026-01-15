@@ -4,6 +4,15 @@ export const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
+export interface AgentConfig {
+  system_prompt?: string | null
+  content_prompt_template?: string | null
+  tone?: string | null
+  writing_style?: string | null
+  target_audience?: string | null
+  additional_instructions?: string | null
+}
+
 export async function generateBlogContent(
   topic: string,
   keywords: string[],
@@ -16,7 +25,8 @@ export async function generateBlogContent(
     whatsapp_color?: string
     keywords_bg_color?: string
     keywords_text_color?: string
-  }
+  },
+  agentConfig?: AgentConfig
 ): Promise<{ title: string; content: string; excerpt: string }> {
   const keywordsText = keywords.join(', ')
   const ctaSection = ctaText && ctaLink 
@@ -30,40 +40,8 @@ export async function generateBlogContent(
   const currentMonth = months[now.getMonth()]
   const currentDate = `${currentMonth} de ${currentYear}`
 
-  const prompt = `Crie um post de blog completo e profissional em português sobre "${topic}".
-
-⚠️ ATENÇÃO CRÍTICA - DATA ATUAL: Estamos em ${currentDate} (${currentYear}).
-- NUNCA mencione 2023, 2024 ou 2025 como se fossem o ano atual
-- Use APENAS dados, estatísticas e informações de ${currentYear}
-- Se precisar mencionar anos anteriores, deixe claro que são dados históricos/comparativos
-- Todas as referências temporais devem ser para ${currentYear}
-- Use expressões como "em ${currentYear}", "atualmente em ${currentYear}", "dados de ${currentYear}"
-
-Palavras-chave para incluir: ${keywordsText}
-
-Requisitos:
-- Título atrativo e otimizado para SEO
-- Conteúdo bem estruturado com subtítulos (H2, H3)
-- Parágrafos claros e informativos
-- Inclua as palavras-chave de forma natural
-- Seção de conclusão
-- Use EXCLUSIVAMENTE informações atualizadas de ${currentYear}
-- NUNCA use dados de anos anteriores (2023, 2024, 2025) como se fossem atuais
-${ctaSection ? '- Inclua o CTA fornecido no final do post' : ''}
-
-Formato de resposta (JSON):
-{
-  "title": "Título do post",
-  "content": "Conteúdo completo em HTML com tags <h2>, <h3>, <p>, etc.",
-  "excerpt": "Resumo curto de 150 caracteres"
-}`
-
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4-turbo-preview',
-    messages: [
-      {
-        role: 'system',
-        content: `Você é um especialista em criação de conteúdo para blogs, SEO e marketing digital. 
+  // Construir prompt do sistema (usar personalizado ou padrão)
+  const defaultSystemPrompt = `Você é um especialista em criação de conteúdo para blogs, SEO e marketing digital. 
 
 ⚠️ DATA ATUAL: ${currentDate} (${currentYear})
 
@@ -73,11 +51,69 @@ REGRAS OBRIGATÓRIAS:
 - Todas as estatísticas, tendências e referências devem ser de ${currentYear}
 - Se mencionar anos anteriores, deixe claro que são dados históricos
 
-Sempre retorne JSON válido.`,
+Sempre retorne JSON válido.`
+
+  let systemPrompt = agentConfig?.system_prompt || defaultSystemPrompt
+  
+  // Adicionar informações de tom, estilo e público-alvo ao system prompt se fornecidos
+  const toneInfo = agentConfig?.tone ? `\n\nTOM DE VOZ: ${agentConfig.tone}` : ''
+  const styleInfo = agentConfig?.writing_style ? `\nESTILO DE ESCRITA: ${agentConfig.writing_style}` : ''
+  const audienceInfo = agentConfig?.target_audience ? `\nPÚBLICO-ALVO: ${agentConfig.target_audience}` : ''
+  const additionalInfo = agentConfig?.additional_instructions ? `\n\nINSTRUÇÕES ADICIONAIS:\n${agentConfig.additional_instructions}` : ''
+  
+  if (toneInfo || styleInfo || audienceInfo || additionalInfo) {
+    systemPrompt += `${toneInfo}${styleInfo}${audienceInfo}${additionalInfo}`
+  }
+
+  // Construir prompt de conteúdo (usar template personalizado ou padrão)
+  const defaultContentPrompt = `Crie um post de blog completo e profissional em português sobre "{topic}".
+
+⚠️ ATENÇÃO CRÍTICA - DATA ATUAL: Estamos em ${currentDate} (${currentYear}).
+- NUNCA mencione 2023, 2024 ou 2025 como se fossem o ano atual
+- Use APENAS dados, estatísticas e informações de ${currentYear}
+- Se precisar mencionar anos anteriores, deixe claro que são dados históricos/comparativos
+- Todas as referências temporais devem ser para ${currentYear}
+- Use expressões como "em ${currentYear}", "atualmente em ${currentYear}", "dados de ${currentYear}"
+
+Palavras-chave para incluir: {keywords}
+
+Requisitos:
+- Título atrativo e otimizado para SEO
+- Conteúdo bem estruturado com subtítulos (H2, H3)
+- Parágrafos claros e informativos
+- Inclua as palavras-chave de forma natural
+- Seção de conclusão
+- Use EXCLUSIVAMENTE informações atualizadas de ${currentYear}
+- NUNCA use dados de anos anteriores (2023, 2024, 2025) como se fossem atuais
+{ctaSection}
+
+Formato de resposta (JSON):
+{
+  "title": "Título do post",
+  "content": "Conteúdo completo em HTML com tags <h2>, <h3>, <p>, etc.",
+  "excerpt": "Resumo curto de 150 caracteres"
+}`
+
+  let contentPrompt = agentConfig?.content_prompt_template || defaultContentPrompt
+  
+  // Substituir variáveis no template
+  contentPrompt = contentPrompt
+    .replace(/{topic}/g, topic)
+    .replace(/{keywords}/g, keywordsText)
+    .replace(/{currentYear}/g, String(currentYear))
+    .replace(/{currentDate}/g, currentDate)
+    .replace(/{ctaSection}/g, ctaSection ? '- Inclua o CTA fornecido no final do post' : '')
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4-turbo-preview',
+    messages: [
+      {
+        role: 'system',
+        content: systemPrompt,
       },
       {
         role: 'user',
-        content: prompt,
+        content: contentPrompt,
       },
     ],
     response_format: { type: 'json_object' },

@@ -18,6 +18,12 @@ export interface Database {
           whatsapp_color?: string | null
           keywords_bg_color?: string | null
           keywords_text_color?: string | null
+          system_prompt?: string | null
+          content_prompt_template?: string | null
+          tone?: string | null
+          writing_style?: string | null
+          target_audience?: string | null
+          additional_instructions?: string | null
         }
         Insert: {
           id?: string
@@ -35,6 +41,12 @@ export interface Database {
           whatsapp_color?: string | null
           keywords_bg_color?: string | null
           keywords_text_color?: string | null
+          system_prompt?: string | null
+          content_prompt_template?: string | null
+          tone?: string | null
+          writing_style?: string | null
+          target_audience?: string | null
+          additional_instructions?: string | null
         }
         Update: {
           id?: string
@@ -51,6 +63,12 @@ export interface Database {
           whatsapp_color?: string | null
           keywords_bg_color?: string | null
           keywords_text_color?: string | null
+          system_prompt?: string | null
+          content_prompt_template?: string | null
+          tone?: string | null
+          writing_style?: string | null
+          target_audience?: string | null
+          additional_instructions?: string | null
         }
       }
       user_settings: {

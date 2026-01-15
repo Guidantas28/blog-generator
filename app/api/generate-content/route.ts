@@ -65,13 +65,36 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { topic, keywords, ctaText, ctaLink, phoneNumber, colors } = validation.data
+    const { topic, keywords, siteId, ctaText, ctaLink, phoneNumber, colors } = validation.data
 
     logger.info('Gerando conteúdo', {
       endpoint: '/api/generate-content',
       userId: session.user.id,
       topic: topic.substring(0, 50), // Log apenas início do tópico
+      siteId: siteId || 'none',
     })
+
+    // Buscar configurações do agente se siteId for fornecido
+    let agentConfig = undefined
+    if (siteId) {
+      const { data: siteData } = await supabase
+        .from('wordpress_sites')
+        .select('system_prompt, content_prompt_template, tone, writing_style, target_audience, additional_instructions')
+        .eq('id', siteId)
+        .eq('user_id', session.user.id)
+        .single()
+
+      if (siteData) {
+        agentConfig = {
+          system_prompt: siteData.system_prompt || undefined,
+          content_prompt_template: siteData.content_prompt_template || undefined,
+          tone: siteData.tone || undefined,
+          writing_style: siteData.writing_style || undefined,
+          target_audience: siteData.target_audience || undefined,
+          additional_instructions: siteData.additional_instructions || undefined,
+        }
+      }
+    }
 
     // Converter null para undefined no objeto colors
     const normalizedColors = colors ? {
@@ -89,7 +112,8 @@ export async function POST(request: NextRequest) {
       ctaText ?? undefined,
       ctaLink ?? undefined,
       phoneNumber ?? undefined,
-      normalizedColors
+      normalizedColors,
+      agentConfig
     )
 
     const duration = Date.now() - startTime
