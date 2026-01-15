@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerClient } from '@/lib/supabase-server'
+import { getServerClient, getServiceRoleClient } from '@/lib/supabase-server'
 import { generateKeywords, generateBlogContent, AgentConfig } from '@/lib/openai'
 import { searchImages } from '@/lib/images'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
