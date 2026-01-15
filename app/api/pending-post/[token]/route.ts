@@ -101,10 +101,23 @@ export async function PUT(
       }
     } else if (action === 'edit') {
       // Editar post
+      // Se image_url for base64, manter como está (será salvo diretamente)
       updatePayload = {
         ...updateData,
         status: 'edited',
         updated_at: new Date().toISOString(),
+      }
+      
+      // Se image_url for base64 data URL, validar e manter
+      if (updateData.image_url && updateData.image_url.startsWith('data:image/')) {
+        // Validar tamanho (máximo ~5MB em base64)
+        const base64Data = updateData.image_url.split(',')[1]
+        if (base64Data && base64Data.length > 7 * 1024 * 1024) {
+          return NextResponse.json(
+            { error: 'Imagem muito grande. Tamanho máximo: 5MB' },
+            { status: 400 }
+          )
+        }
       }
     } else {
       return NextResponse.json({ error: 'Ação inválida' }, { status: 400 })

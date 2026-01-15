@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import axios from 'axios'
+import DOMPurify from 'isomorphic-dompurify'
 import { ChakraProvider } from '@/components/ChakraProvider'
 import {
   Box,
@@ -51,6 +52,9 @@ export default function ApprovePostPage() {
   const [editedTitle, setEditedTitle] = useState('')
   const [editedExcerpt, setEditedExcerpt] = useState('')
   const [youtubeUrl, setYoutubeUrl] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (token) {
@@ -68,6 +72,7 @@ export default function ApprovePostPage() {
       setEditedTitle(response.data.title)
       setEditedExcerpt(response.data.excerpt || '')
       setYoutubeUrl(response.data.youtube_embed_url || '')
+      setImageUrl(response.data.image_url || '')
     } catch (error: any) {
       console.error('Erro ao carregar post:', error)
       setError(error.response?.data?.error || 'Erro ao carregar post')
@@ -87,11 +92,12 @@ export default function ApprovePostPage() {
       }
 
       // Se houve edições, incluir no update
-      if (editedContent !== post?.content || editedTitle !== post?.title || editedExcerpt !== post?.excerpt || youtubeUrl !== (post?.youtube_embed_url || '')) {
+      if (editedContent !== post?.content || editedTitle !== post?.title || editedExcerpt !== post?.excerpt || youtubeUrl !== (post?.youtube_embed_url || '') || imageUrl !== (post?.image_url || '')) {
         updateData.title = editedTitle
         updateData.content = editedContent
         updateData.excerpt = editedExcerpt
         updateData.youtube_embed_url = youtubeUrl || null
+        updateData.image_url = imageUrl || null
         
         // Inserir embed do YouTube no conteúdo se fornecido
         if (youtubeUrl) {
@@ -170,6 +176,7 @@ export default function ApprovePostPage() {
         content: finalContent,
         excerpt: editedExcerpt,
         youtube_embed_url: youtubeUrl || null,
+        image_url: imageUrl || null,
       })
       setSuccess('Alterações salvas com sucesso!')
       setTimeout(() => {
@@ -201,6 +208,7 @@ export default function ApprovePostPage() {
         setEditedContent(response.data.post.content)
         setEditedTitle(response.data.post.title)
         setEditedExcerpt(response.data.post.excerpt || '')
+        setImageUrl(response.data.post.image_url || '')
         setSuccess('Conteúdo regenerado com sucesso!')
       }
     } catch (error: any) {
@@ -208,6 +216,65 @@ export default function ApprovePostPage() {
       setError(error.response?.data?.error || 'Erro ao regenerar post')
     } finally {
       setRegenerating(false)
+    }
+  }
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validar tipo de arquivo
+    if (!file.type.startsWith('image/')) {
+      setError('Por favor, selecione um arquivo de imagem válido')
+      return
+    }
+
+    // Validar tamanho (máximo 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('A imagem deve ter no máximo 5MB')
+      return
+    }
+
+    try {
+      setUploadingImage(true)
+      setError(null)
+
+      // Converter para base64 para enviar via API
+      const reader = new FileReader()
+      reader.onloadend = async () => {
+        try {
+          const base64Image = reader.result as string
+          // Atualizar apenas a imagem
+          const response = await axios.put(`/api/pending-post/${token}`, {
+            action: 'edit',
+            image_url: base64Image,
+            title: editedTitle,
+            content: editedContent,
+            excerpt: editedExcerpt,
+            youtube_embed_url: youtubeUrl || null,
+          })
+
+          if (response.data.post) {
+            setImageUrl(response.data.post.image_url || '')
+            setPost({ ...post!, image_url: response.data.post.image_url })
+            setSuccess('Imagem atualizada com sucesso!')
+          }
+        } catch (error: any) {
+          console.error('Erro ao fazer upload da imagem:', error)
+          setError(error.response?.data?.error || 'Erro ao fazer upload da imagem')
+        } finally {
+          setUploadingImage(false)
+        }
+      }
+      reader.onerror = () => {
+        setError('Erro ao ler o arquivo')
+        setUploadingImage(false)
+      }
+      reader.readAsDataURL(file)
+    } catch (error: any) {
+      console.error('Erro ao processar imagem:', error)
+      setError('Erro ao processar imagem')
+      setUploadingImage(false)
     }
   }
 
@@ -369,68 +436,182 @@ export default function ApprovePostPage() {
                 <FieldLabel color="gray.300" fontWeight="medium">
                   Conteúdo
                 </FieldLabel>
+                <Box
+                  bg="gray.700"
+                  borderWidth="1px"
+                  borderColor="gray.600"
+                  borderRadius="md"
+                  p={4}
+                  minH="300px"
+                  maxH="600px"
+                  overflowY="auto"
+                  color="gray.50"
+                  fontSize="md"
+                  lineHeight="1.6"
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(editedContent || '<p>Nenhum conteúdo ainda</p>'),
+                  }}
+                  style={{
+                    // Estilos para elementos HTML renderizados
+                  }}
+                  className="blog-content-preview"
+                />
+                <style dangerouslySetInnerHTML={{
+                  __html: `
+                    .blog-content-preview h1,
+                    .blog-content-preview h2,
+                    .blog-content-preview h3,
+                    .blog-content-preview h4,
+                    .blog-content-preview h5,
+                    .blog-content-preview h6 {
+                      color: #f9fafb;
+                      margin-top: 1em;
+                      margin-bottom: 0.5em;
+                    }
+                    .blog-content-preview p {
+                      margin-bottom: 1em;
+                    }
+                    .blog-content-preview ul,
+                    .blog-content-preview ol {
+                      margin-left: 1.5em;
+                      margin-bottom: 1em;
+                    }
+                    .blog-content-preview img {
+                      max-width: 100%;
+                      height: auto;
+                      border-radius: 8px;
+                    }
+                  `
+                }} />
                 <Textarea
-                  rows={20}
+                  rows={10}
                   value={editedContent}
                   onChange={(e) => setEditedContent(e.target.value)}
-                  bg="gray.700"
+                  bg="gray.800"
                   borderColor="gray.600"
                   color="gray.50"
                   size="lg"
+                  mt={4}
                   fontFamily="mono"
-                  fontSize="sm"
+                  fontSize="xs"
+                  placeholder="Edite o HTML aqui se necessário..."
                 />
+                <Text fontSize="xs" color="gray.400" mt={1}>
+                  Visualização acima | Edição HTML abaixo
+                </Text>
               </FieldRoot>
 
-              {post.image_url && (
-                <Box>
-                  <Text color="gray.300" fontWeight="medium" mb={2}>
-                    Imagem:
+              <FieldRoot>
+                <FieldLabel color="gray.300" fontWeight="medium" mb={2}>
+                  Imagem
+                </FieldLabel>
+                <VStack gap={3} align="stretch">
+                  {(imageUrl || post.image_url) && (
+                    <Box>
+                      <img
+                        src={imageUrl || post.image_url}
+                        alt={post.title}
+                        style={{
+                          maxWidth: '400px',
+                          maxHeight: '300px',
+                          width: 'auto',
+                          height: 'auto',
+                          borderRadius: '8px',
+                          objectFit: 'contain',
+                        }}
+                      />
+                    </Box>
+                  )}
+                  <HStack gap={2}>
+                    <Input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      display="none"
+                    />
+                    <Button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImage}
+                      colorPalette="blue"
+                      variant="outline"
+                      size="sm"
+                      loading={uploadingImage}
+                      loadingText="Enviando..."
+                    >
+                      {imageUrl || post.image_url ? 'Trocar Imagem' : 'Enviar Imagem'}
+                    </Button>
+                    {(imageUrl || post.image_url) && (
+                      <Button
+                        onClick={() => {
+                          setImageUrl('')
+                          if (fileInputRef.current) {
+                            fileInputRef.current.value = ''
+                          }
+                        }}
+                        disabled={uploadingImage}
+                        colorPalette="red"
+                        variant="ghost"
+                        size="sm"
+                      >
+                        Remover
+                      </Button>
+                    )}
+                  </HStack>
+                  <Text fontSize="xs" color="gray.400">
+                    Formatos aceitos: JPG, PNG, GIF. Tamanho máximo: 5MB
                   </Text>
-                  <img
-                    src={post.image_url}
-                    alt={post.title}
-                    style={{ maxWidth: '100%', borderRadius: '8px' }}
-                  />
-                </Box>
-              )}
+                </VStack>
+              </FieldRoot>
 
               <HStack gap={4} mt={4}>
                 <Button
                   onClick={handleSaveEdit}
-                  disabled={saving || regenerating}
+                  disabled={saving || regenerating || uploadingImage}
                   colorPalette="blue"
                   flex={1}
                   loading={saving}
                   loadingText="Salvando..."
+                  bg="blue.600"
+                  color="white"
+                  _hover={{ bg: 'blue.700' }}
                 >
                   Salvar Edições
                 </Button>
                 <Button
                   onClick={handleRegenerate}
-                  disabled={saving || regenerating}
+                  disabled={saving || regenerating || uploadingImage}
                   colorPalette="purple"
                   flex={1}
                   loading={regenerating}
                   loadingText="Regenerando..."
+                  bg="purple.600"
+                  color="white"
+                  _hover={{ bg: 'purple.700' }}
                 >
                   Regenerar Conteúdo
                 </Button>
                 <Button
                   onClick={handleReject}
-                  disabled={saving || regenerating}
+                  disabled={saving || regenerating || uploadingImage}
                   colorPalette="red"
-                  variant="outline"
+                  variant="solid"
+                  bg="red.600"
+                  color="white"
+                  _hover={{ bg: 'red.700' }}
                 >
                   Rejeitar
                 </Button>
                 <Button
                   onClick={handleApprove}
-                  disabled={saving || regenerating}
+                  disabled={saving || regenerating || uploadingImage}
                   colorPalette="green"
                   flex={1}
                   loading={saving}
                   loadingText="Aprovando..."
+                  bg="green.600"
+                  color="white"
+                  _hover={{ bg: 'green.700' }}
                 >
                   Aprovar e Publicar
                 </Button>
