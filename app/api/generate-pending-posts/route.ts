@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { siteId, scheduledDate, count } = validation.data
+    const postCount = count || 3 // Garantir que count tenha um valor padrão
 
     // Validar que a data é futura
     const scheduledDateTime = new Date(scheduledDate)
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
       userId: sessionUserId,
       siteId,
       scheduledDate,
-      count,
+      count: postCount,
     })
 
     // Buscar dados do site
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
     // Gerar múltiplos posts
     const generatedPosts = []
     
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < postCount; i++) {
       try {
         // Gerar tópico baseado na categoria do negócio ou usar um genérico
         // Por enquanto, vamos usar um tópico genérico que pode ser personalizado
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
         try {
           const images = await searchImages(topic, 1)
           if (images && images.length > 0) {
-            imageUrl = images[0].url
+            imageUrl = images[0] // searchImages retorna string[], não objetos
           }
         } catch (imageError) {
           logger.warn('Erro ao buscar imagem', { error: imageError, topic })

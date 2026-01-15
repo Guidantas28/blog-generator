@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     try {
       const images = await searchImages(pendingPost.topic || pendingPost.title, 1)
       if (images && images.length > 0) {
-        imageUrl = images[0].url
+        imageUrl = images[0] // searchImages retorna string[], não objetos
       }
     } catch (imageError) {
       logger.warn('Erro ao buscar nova imagem', { error: imageError })

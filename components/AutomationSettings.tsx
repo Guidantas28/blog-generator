@@ -20,8 +20,8 @@ import {
   CardBody,
   Badge,
   Spinner,
-  Switch,
 } from '@chakra-ui/react'
+import { Switch } from '@chakra-ui/react'
 
 interface AutomationSetting {
   id: string
@@ -260,6 +260,8 @@ export default function AutomationSettings({ userId }: { userId: string }) {
       days_per_week: 1,
       frequency: 'weekly',
       selected_days: [],
+      requires_approval: false,
+      approval_email: '',
     })
     setShowForm(false)
     setEditingId(null)
@@ -569,14 +571,18 @@ export default function AutomationSettings({ userId }: { userId: string }) {
                         Se ativado, posts serão gerados uma semana antes e enviados por email para aprovação
                       </Text>
                     </Box>
-                    <Switch
+                    <Switch.Root
                       checked={formData.requires_approval}
-                      onCheckedChange={(checked) =>
-                        setFormData({ ...formData, requires_approval: checked })
+                      onCheckedChange={(details: { checked: boolean }) =>
+                        setFormData({ ...formData, requires_approval: details.checked })
                       }
                       colorPalette="blue"
                       size="lg"
-                    />
+                    >
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                    </Switch.Root>
                   </HStack>
 
                   {formData.requires_approval && (
