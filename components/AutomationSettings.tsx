@@ -562,28 +562,47 @@ export default function AutomationSettings({ userId }: { userId: string }) {
                 </Heading>
                 
                 <VStack gap={4} align="stretch">
-                  <HStack justify="space-between" align="center">
-                    <Box flex={1}>
-                      <FieldLabel color="gray.300" fontWeight="medium" mb={1}>
-                        Requer Aprovação Antes de Publicar
-                      </FieldLabel>
-                      <Text fontSize="xs" color="gray.400">
-                        Se ativado, posts serão gerados uma semana antes e enviados por email para aprovação
-                      </Text>
-                    </Box>
-                    <Switch.Root
-                      checked={formData.requires_approval}
-                      onCheckedChange={(details: { checked: boolean }) =>
-                        setFormData({ ...formData, requires_approval: details.checked })
-                      }
-                      colorPalette="blue"
-                      size="lg"
+                  <FieldRoot>
+                    <HStack justify="space-between" align="center">
+                      <Box flex={1}>
+                        <FieldLabel color="gray.300" fontWeight="medium" mb={1} fontSize="sm">
+                          Requer Aprovação Antes de Publicar
+                        </FieldLabel>
+                        <Text fontSize="xs" color="gray.400">
+                          Se ativado, posts serão gerados uma semana antes e enviados por email para aprovação
+                        </Text>
+                      </Box>
+                    <Box
+                      position="relative"
+                      display="inline-flex"
+                      alignItems="center"
+                      width="44px"
+                      height="24px"
+                      borderRadius="full"
+                      bg={formData.requires_approval ? "blue.500" : "gray.600"}
+                      transition="all 0.2s"
+                      cursor="pointer"
+                      onClick={() => {
+                        const newValue = !formData.requires_approval
+                        setFormData((prev) => ({ ...prev, requires_approval: newValue }))
+                      }}
+                      _hover={{
+                        bg: formData.requires_approval ? "blue.600" : "gray.500"
+                      }}
                     >
-                      <Switch.Control>
-                        <Switch.Thumb />
-                      </Switch.Control>
-                    </Switch.Root>
-                  </HStack>
+                      <Box
+                        position="absolute"
+                        left={formData.requires_approval ? "22px" : "2px"}
+                        width="20px"
+                        height="20px"
+                        borderRadius="full"
+                        bg="white"
+                        transition="all 0.2s"
+                        boxShadow="sm"
+                      />
+                    </Box>
+                    </HStack>
+                  </FieldRoot>
 
                   {formData.requires_approval && (
                     <FieldRoot>
