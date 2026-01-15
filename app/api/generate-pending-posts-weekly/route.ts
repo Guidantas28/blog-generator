@@ -5,6 +5,66 @@ import { logger } from '@/lib/logger'
 export const dynamic = 'force-dynamic'
 
 /**
+ * URL do webhook n8n para envio de emails de aprovação
+ */
+const APPROVAL_WEBHOOK_URL = 'https://n8n.avidati.com.br/webhook/e4ce9e41-9f69-4a6a-848d-23e9620760a9'
+
+/**
+ * Envia notificação via webhook para aprovação de posts
+ */
+async function sendApprovalEmailWebhook(data: {
+  siteName: string
+  siteUrl: string
+  approvalEmail: string
+  publicationDate: string
+  posts: Array<{
+    id: string
+    title: string
+    approvalToken: string
+    approvalUrl: string
+  }>
+}) {
+  try {
+    const response = await fetch(APPROVAL_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: 'pending_posts_ready_for_approval',
+        site_name: data.siteName,
+        site_url: data.siteUrl,
+        approval_email: data.approvalEmail,
+        publication_date: data.publicationDate,
+        posts: data.posts.map(post => ({
+          id: post.id,
+          title: post.title,
+          approval_url: post.approvalUrl,
+        })),
+        timestamp: new Date().toISOString(),
+      }),
+    })
+
+    if (!response.ok) {
+      logger.warn(`Webhook de aprovação retornou status ${response.status}`, {
+        endpoint: '/api/generate-pending-posts-weekly',
+      })
+    } else {
+      logger.info('Webhook de aprovação enviado com sucesso', {
+        endpoint: '/api/generate-pending-posts-weekly',
+        siteName: data.siteName,
+        postsCount: data.posts.length,
+      })
+    }
+  } catch (error: any) {
+    // Não falhar a geração se o webhook falhar
+    logger.error('Erro ao enviar webhook de aprovação', error, {
+      endpoint: '/api/generate-pending-posts-weekly',
+    })
+  }
+}
+
+/**
  * API para gerar posts pendentes uma semana antes da publicação
  * Esta rota deve ser chamada por um cron job semanal (domingos)
  * Gera posts para sites que têm automação configurada
@@ -144,7 +204,9 @@ async function handleGeneratePendingPosts(request: NextRequest) {
 
         // Chamar API interna para gerar posts
         // Em produção, isso funcionará via HTTP. Em desenvolvimento, pode precisar ajustar a URL
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL 
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL 
+          ? process.env.NEXT_PUBLIC_APP_URL
+          : process.env.VERCEL_URL 
           ? `https://${process.env.VERCEL_URL}` 
           : 'http://localhost:3000'
         
@@ -155,7 +217,9 @@ async function handleGeneratePendingPosts(request: NextRequest) {
               'Content-Type': 'application/json',
               // Para chamadas internas, podemos usar um header especial
               'X-Internal-Request': 'true',
-              'X-User-Id': automation.wordpress_sites.user_id,
+              'X-User-Id': Array.isArray(automation.wordpress_sites) 
+                ? automation.wordpress_sites[0]?.user_id 
+                : (automation.wordpress_sites as any)?.user_id,
             },
             body: JSON.stringify({
               siteId: automation.site_id,
@@ -177,6 +241,29 @@ async function handleGeneratePendingPosts(request: NextRequest) {
             count: data.posts?.length || 0,
             publicationDate: targetDate,
           })
+
+          // Enviar webhook de aprovação se houver email configurado e posts gerados
+          if (automation.approval_email && data.posts && data.posts.length > 0) {
+            const postsWithUrls = data.posts.map((post: any) => ({
+              id: post.id,
+              title: post.title,
+              approvalToken: post.approvalToken,
+              approvalUrl: `${baseUrl}/approve/${post.approvalToken}`,
+            }))
+
+            // wordpress_sites pode ser um objeto ou array dependendo da query
+            const siteData = Array.isArray(automation.wordpress_sites) 
+              ? automation.wordpress_sites[0] 
+              : automation.wordpress_sites
+
+            await sendApprovalEmailWebhook({
+              siteName: siteData?.name || 'Site desconhecido',
+              siteUrl: siteData?.url || '',
+              approvalEmail: automation.approval_email,
+              publicationDate: targetDate,
+              posts: postsWithUrls,
+            })
+          }
         } catch (fetchError: any) {
           // Se a chamada HTTP falhar (ex: em desenvolvimento), logar mas continuar
           logger.warn(`Erro ao chamar API de geração de posts`, {

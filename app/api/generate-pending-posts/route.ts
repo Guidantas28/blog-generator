@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     if (!validation.success) {
       logger.warn('Validação falhou', {
         endpoint: '/api/generate-pending-posts',
-        userId: session.user.id,
+        userId: sessionUserId,
         errors: validation.error.errors,
       })
       return NextResponse.json(
@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
         if (insertError) {
           logger.error('Erro ao salvar post pendente', insertError, {
             endpoint: '/api/generate-pending-posts',
-            userId: session.user.id,
+            userId: sessionUserId,
           })
           continue
         }
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
       } catch (error: any) {
         logger.error(`Erro ao gerar post ${i + 1}`, error, {
           endpoint: '/api/generate-pending-posts',
-          userId: session.user.id,
+          userId: sessionUserId,
         })
       }
     }
