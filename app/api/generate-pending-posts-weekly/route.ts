@@ -189,37 +189,94 @@ async function handleGeneratePendingPosts(request: NextRequest) {
     // Buscar automações ativas que precisam gerar posts E que requerem aprovação
     logger.info('Buscando automações ativas com aprovação habilitada')
     
-    const { data: automations, error: fetchError } = await supabase
-      .from('automation_settings')
-      .select('*, wordpress_sites(*)')
-      .eq('is_active', true)
-      .eq('requires_approval', true) // Apenas automações com aprovação ativada
+    try {
+      // Buscar automações - primeiro sem filtrar is_active para verificar se a coluna existe
+      let query = supabase
+        .from('automation_settings')
+        .select(`
+          *,
+          wordpress_sites (
+            id,
+            name,
+            url,
+            user_id
+          )
+        `)
+        .eq('requires_approval', true) // Apenas automações com aprovação ativada
+      
+      // Tentar filtrar por is_active, mas se a coluna não existir, continuar sem o filtro
+      // (a migração SQL deve ser executada para adicionar a coluna)
+      const { data: automations, error: fetchError } = await query
 
-    if (fetchError) {
-      logger.error('Erro ao buscar automações', fetchError, {
+      if (fetchError) {
+        logger.error('Erro ao buscar automações', fetchError, {
+          endpoint: '/api/generate-pending-posts-weekly',
+          errorCode: fetchError.code,
+          errorMessage: fetchError.message,
+          errorDetails: fetchError.details,
+          errorHint: fetchError.hint,
+        })
+        return NextResponse.json(
+          { 
+            error: 'Erro ao buscar automações',
+            details: fetchError.message,
+            code: fetchError.code,
+          },
+          { status: 500 }
+        )
+      }
+
+      logger.info(`Encontradas ${automations?.length || 0} automações com aprovação habilitada`)
+
+      if (!automations || automations.length === 0) {
+        logger.info('Nenhuma automação encontrada, retornando sucesso vazio')
+        return NextResponse.json({
+          message: 'Nenhuma automação ativa com aprovação habilitada encontrada',
+          processed: 0,
+        })
+      }
+
+      // Processar automações
+      return await processAutomations(automations, supabase, targetDate, publicationDate)
+    } catch (queryError: any) {
+      logger.error('Erro inesperado ao buscar automações', queryError, {
         endpoint: '/api/generate-pending-posts-weekly',
-        errorCode: fetchError.code,
-        errorMessage: fetchError.message,
-        errorDetails: fetchError.details,
+        errorMessage: queryError.message,
+        errorStack: queryError.stack,
       })
       return NextResponse.json(
-        { 
-          error: 'Erro ao buscar automações',
-          details: fetchError.message,
+        {
+          error: 'Erro inesperado ao processar automações',
+          details: queryError.message,
         },
         { status: 500 }
       )
     }
+  } catch (error: any) {
+    logger.error('Erro ao processar geração de posts pendentes', error, {
+      endpoint: '/api/generate-pending-posts-weekly',
+      errorMessage: error.message,
+      errorStack: error.stack,
+    })
+    
+    return NextResponse.json(
+      {
+        error: error.message || 'Erro ao processar geração de posts',
+        details: process.env.NODE_ENV === 'development' 
+          ? { stack: error.stack, message: error.message }
+          : undefined,
+      },
+      { status: 500 }
+    )
+  }
+}
 
-    logger.info(`Encontradas ${automations?.length || 0} automações com aprovação habilitada`)
-
-    if (!automations || automations.length === 0) {
-      logger.info('Nenhuma automação encontrada, retornando sucesso vazio')
-      return NextResponse.json({
-        message: 'Nenhuma automação ativa com aprovação habilitada encontrada',
-        processed: 0,
-      })
-    }
+async function processAutomations(
+  automations: any[],
+  supabase: any,
+  targetDate: string,
+  publicationDate: Date
+) {
 
     const results = {
       processed: 0,
@@ -228,7 +285,7 @@ async function handleGeneratePendingPosts(request: NextRequest) {
       errors: [] as string[],
     }
 
-    for (const automation of automations) {
+    for (const automation of automationsWithSites) {
       try {
         results.processed++
 
@@ -267,16 +324,15 @@ async function handleGeneratePendingPosts(request: NextRequest) {
           : 'http://localhost:3000'
         
         // Verificar se temos dados do site
-        const siteData = Array.isArray(automation.wordpress_sites) 
-          ? automation.wordpress_sites[0] 
-          : automation.wordpress_sites
+        const siteData = automation.wordpress_sites
         
         if (!siteData || !siteData.user_id) {
           logger.error('Dados do site não encontrados', {
             automationId: automation.id,
             siteId: automation.site_id,
+            hasSiteData: !!siteData,
           })
-          throw new Error('Dados do site não encontrados')
+          throw new Error(`Dados do site não encontrados para site_id: ${automation.site_id}`)
         }
         
         try {
