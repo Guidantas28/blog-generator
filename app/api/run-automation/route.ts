@@ -116,12 +116,12 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Buscar todas as automações ativas que NÃO requerem aprovação
+    // Buscar todas as automações que NÃO requerem aprovação
     // Automações com requires_approval = true são gerenciadas pelo sistema semanal de aprovação
+    // Nota: Não filtrar por is_active aqui pois a coluna pode não existir ainda (ver migração SQL)
     const { data: allAutomations, error: automationsError } = await supabase
       .from('automation_settings')
       .select('*')
-      .eq('is_active', true)
 
     if (automationsError) {
       console.error('Erro ao buscar automações:', automationsError)
@@ -134,9 +134,16 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Filtrar automações que NÃO requerem aprovação (client-side filter)
+    // Filtrar automações que NÃO requerem aprovação e estão ativas (client-side filter)
+    // Automações com requires_approval = true são gerenciadas pelo sistema semanal de aprovação
     const automations = (allAutomations || []).filter(
-      (auto) => !auto.requires_approval || auto.requires_approval === false
+      (auto) => {
+        // Se is_active existir e for false, pular
+        if (auto.is_active === false) return false
+        // Se requires_approval for true, pular (gerenciado pelo sistema semanal)
+        if (auto.requires_approval === true) return false
+        return true
+      }
     )
 
     console.log(`Encontradas ${automations?.length || 0} automação(ões) sem aprovação no banco de dados`)
