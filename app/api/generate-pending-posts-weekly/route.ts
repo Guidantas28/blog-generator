@@ -277,7 +277,7 @@ async function processAutomations(
   targetDate: string,
   publicationDate: Date
 ) {
-
+  try {
     const results = {
       processed: 0,
       succeeded: 0,
@@ -285,9 +285,17 @@ async function processAutomations(
       errors: [] as string[],
     }
 
-    for (const automation of automationsWithSites) {
+    for (const automation of automations) {
       try {
         results.processed++
+
+        // Verificar se a automação está ativa (se a coluna existir)
+        if (automation.is_active === false) {
+          logger.info(`Automação ${automation.id} está inativa, pulando...`, {
+            siteId: automation.site_id,
+          })
+          continue
+        }
 
         // Verificar se a automação requer aprovação (deve estar true)
         if (!automation.requires_approval) {
@@ -324,13 +332,17 @@ async function processAutomations(
           : 'http://localhost:3000'
         
         // Verificar se temos dados do site
-        const siteData = automation.wordpress_sites
+        // wordpress_sites pode ser um objeto ou array dependendo da query
+        const siteData = Array.isArray(automation.wordpress_sites) 
+          ? automation.wordpress_sites[0] 
+          : automation.wordpress_sites
         
         if (!siteData || !siteData.user_id) {
           logger.error('Dados do site não encontrados', {
             automationId: automation.id,
             siteId: automation.site_id,
             hasSiteData: !!siteData,
+            wordpressSitesType: Array.isArray(automation.wordpress_sites) ? 'array' : typeof automation.wordpress_sites,
           })
           throw new Error(`Dados do site não encontrados para site_id: ${automation.site_id}`)
         }
@@ -436,7 +448,7 @@ async function processAutomations(
       ...results,
     })
   } catch (error: any) {
-    logger.error('Erro ao processar geração de posts pendentes', error, {
+    logger.error('Erro ao processar automações', error, {
       endpoint: '/api/generate-pending-posts-weekly',
       errorMessage: error.message,
       errorStack: error.stack,
@@ -444,7 +456,7 @@ async function processAutomations(
     
     return NextResponse.json(
       {
-        error: error.message || 'Erro ao processar geração de posts',
+        error: error.message || 'Erro ao processar automações',
         details: process.env.NODE_ENV === 'development' 
           ? { stack: error.stack, message: error.message }
           : undefined,
