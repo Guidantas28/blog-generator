@@ -15,11 +15,30 @@ jobs:
       - name: Generate Pending Posts for Next Sunday
         run: |
           echo "Gerando posts pendentes para publicação no próximo domingo..."
-          curl -X POST "${{ secrets.APP_URL }}/api/generate-pending-posts-weekly" \
+          echo "APP_URL: ${{ secrets.APP_URL }}"
+          echo "Timestamp: $(date)"
+          
+          RESPONSE=$(curl -X POST "${{ secrets.APP_URL }}/api/generate-pending-posts-weekly" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" \
             -H "X-Manual-Execution: true" \
-            -f || exit 1
+            -w "\nHTTP_CODE:%{http_code}" \
+            -s)
+          
+          HTTP_CODE=$(echo "$RESPONSE" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | sed '/HTTP_CODE:/d')
+          
+          echo "Response HTTP Code: $HTTP_CODE"
+          echo "Response Body:"
+          echo "$BODY"
+          
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Sucesso! Posts gerados com sucesso."
+            exit 0
+          else
+            echo "❌ Erro: HTTP $HTTP_CODE"
+            exit 1
+          fi
         env:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}

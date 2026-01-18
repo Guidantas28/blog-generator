@@ -172,23 +172,30 @@ async function handleGeneratePendingPosts(request: NextRequest) {
     }
 
     // Verificar se é execução manual (via workflow_dispatch) ou automática (cron)
-    // Se for manual, permitir execução em qualquer dia
-    const isManualExecution = request.headers.get('x-manual-execution') === 'true' || 
-                              request.headers.get('user-agent')?.includes('GitHub Actions')
+    // Headers HTTP são case-insensitive, então verificar em lowercase
+    const manualHeader = request.headers.get('x-manual-execution') || request.headers.get('X-Manual-Execution')
+    const userAgent = request.headers.get('user-agent') || ''
+    const isManualExecution = manualHeader === 'true' || userAgent.includes('GitHub Actions')
     
     const today = new Date()
     const dayOfWeek = today.getDay()
     
-    // Se não for execução manual e não for domingo, apenas logar mas continuar
-    // (permite testes e execuções manuais)
-    if (dayOfWeek !== 0 && !isManualExecution) {
-      logger.info('API chamada fora do domingo, mas continuando processamento', {
+    logger.info('Verificando tipo de execução', {
+      dayOfWeek,
+      isManualExecution,
+      manualHeader,
+      userAgent: userAgent.substring(0, 50),
+      endpoint: '/api/generate-pending-posts-weekly',
+    })
+    
+    // Sempre continuar processamento, independente do dia (permite testes e execuções manuais)
+    if (isManualExecution) {
+      logger.info('✅ Execução manual detectada, processando independente do dia da semana', {
         dayOfWeek,
         endpoint: '/api/generate-pending-posts-weekly',
-        isManualExecution,
       })
-    } else if (isManualExecution) {
-      logger.info('Execução manual detectada, processando independente do dia da semana', {
+    } else {
+      logger.info('Execução automática detectada', {
         dayOfWeek,
         endpoint: '/api/generate-pending-posts-weekly',
       })
