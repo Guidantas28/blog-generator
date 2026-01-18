@@ -17,7 +17,7 @@ import {
   TableRow,
   TableCell,
   TableHeader,
-  TableHead,
+  TableColumnHeader,
 } from '@chakra-ui/react'
 import { CheckCircle, XCircle, RefreshCw, Edit, Eye } from 'lucide-react'
 
@@ -163,18 +163,18 @@ export default function ApprovalTracking({ siteId, pendingPostId }: ApprovalTrac
             <CardBody>
               <TableRoot>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Ação</TableHead>
-                    <TableHead>Post</TableHead>
-                    <TableHead>Site</TableHead>
-                    <TableHead>Data/Hora</TableHead>
-                    <TableHead>IP</TableHead>
+                  <TableRow bg="gray.700" borderBottomWidth="2px" borderColor="gray.600">
+                    <TableColumnHeader color="gray.100" fontWeight="semibold" py={4} px={4}>Ação</TableColumnHeader>
+                    <TableColumnHeader color="gray.100" fontWeight="semibold" py={4} px={4}>Post</TableColumnHeader>
+                    <TableColumnHeader color="gray.100" fontWeight="semibold" py={4} px={4}>Site</TableColumnHeader>
+                    <TableColumnHeader color="gray.100" fontWeight="semibold" py={4} px={4}>Data/Hora</TableColumnHeader>
+                    <TableColumnHeader color="gray.100" fontWeight="semibold" py={4} px={4}>IP</TableColumnHeader>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {actions.map((action) => (
-                    <TableRow key={action.id}>
-                      <TableCell>
+                    <TableRow key={action.id} _hover={{ bg: 'gray.750' }}>
+                      <TableCell py={4} px={4}>
                         <HStack gap={2}>
                           {getActionIcon(action.action)}
                           <Badge colorPalette={getActionColor(action.action)}>
@@ -182,22 +182,24 @@ export default function ApprovalTracking({ siteId, pendingPostId }: ApprovalTrac
                           </Badge>
                         </HStack>
                       </TableCell>
-                      <TableCell>
-                        <Text color="gray.300" fontSize="sm" maxW="300px" isTruncated>
-                          {action.pending_posts?.title || 'N/A'}
-                        </Text>
+                      <TableCell py={4} px={4}>
+                        <Box maxW="300px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">
+                          <Text color="gray.300" fontSize="sm">
+                            {action.pending_posts?.title || 'N/A'}
+                          </Text>
+                        </Box>
                       </TableCell>
-                      <TableCell>
+                      <TableCell py={4} px={4}>
                         <Text color="gray.400" fontSize="sm">
                           {action.pending_posts?.wordpress_sites?.name || 'N/A'}
                         </Text>
                       </TableCell>
-                      <TableCell>
+                      <TableCell py={4} px={4}>
                         <Text color="gray.400" fontSize="sm">
                           {formatDate(action.created_at)}
                         </Text>
                       </TableCell>
-                      <TableCell>
+                      <TableCell py={4} px={4}>
                         <Text color="gray.500" fontSize="xs" fontFamily="mono">
                           {action.ip_address || 'N/A'}
                         </Text>
