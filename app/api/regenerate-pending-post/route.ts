@@ -4,6 +4,7 @@ import { generateKeywords, generateBlogContent, AgentConfig } from '@/lib/openai
 import { searchImages } from '@/lib/images'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 import { logger } from '@/lib/logger'
+import { trackApprovalAction } from '@/lib/approval-tracking'
 import { z } from 'zod'
 import { validateAndSanitize } from '@/lib/validation'
 
@@ -137,6 +138,21 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     }
+
+    // Registrar ação de regeneração
+    const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+    const userAgent = request.headers.get('user-agent') || 'unknown'
+    
+    await trackApprovalAction(supabase, {
+      action: 'regenerate',
+      pendingPostId,
+      ipAddress,
+      userAgent,
+      actionData: {
+        new_title: content.title,
+        regenerated_at: new Date().toISOString(),
+      },
+    })
 
     const duration = Date.now() - startTime
     logger.info('Post regenerado com sucesso', {

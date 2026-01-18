@@ -159,6 +159,38 @@ async function handlePublishApproved(request: NextRequest) {
           .update({ status: 'published', updated_at: new Date().toISOString() })
           .eq('id', approvedPost.id)
 
+        // Enviar webhook quando post é publicado
+        const webhookUrl = 'https://n8n.avidati.com.br/webhook/7b8262b0-c029-4abe-843e-6d170df99a3c'
+        try {
+          await fetch(webhookUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              event: 'post_scheduled',
+              post_id: approvedPost.id,
+              post_title: approvedPost.title,
+              post_url: result.link,
+              site_name: siteData?.name || 'Site desconhecido',
+              site_url: siteData?.url || '',
+              scheduled_date: approvedPost.scheduled_date,
+              published_at: new Date().toISOString(),
+            }),
+          })
+          
+          logger.info('Webhook de publicação enviado com sucesso', {
+            postId: approvedPost.id,
+            postUrl: result.link,
+          })
+        } catch (webhookError: any) {
+          // Não falhar a publicação se o webhook falhar
+          logger.warn('Erro ao enviar webhook de publicação', {
+            error: webhookError.message,
+            postId: approvedPost.id,
+          })
+        }
+
         results.succeeded++
       } catch (error: any) {
         logger.error(`Erro ao publicar post aprovado ${approvedPost.id}`, error, {

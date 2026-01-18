@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerClient } from '@/lib/supabase-server'
 import { logger } from '@/lib/logger'
+import { trackApprovalAction } from '@/lib/approval-tracking'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +32,36 @@ export async function GET(
     if (error || !pendingPost) {
       logger.warn('Post pendente não encontrado', { token })
       return NextResponse.json({ error: 'Post não encontrado ou já processado' }, { status: 404 })
+    }
+
+    // Verificar se o link expirou (5 dias)
+    if (pendingPost.expires_at) {
+      const expiresAt = new Date(pendingPost.expires_at)
+      const now = new Date()
+      
+      if (now > expiresAt) {
+        logger.warn('Link de aprovação expirado', { token, expiresAt, now })
+        return NextResponse.json(
+          { error: 'Link de aprovação expirado. O link é válido por 5 dias.' },
+          { status: 410 }
+        )
+      }
+    }
+
+    // Registrar visualização do post
+    try {
+      const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+      const userAgent = request.headers.get('user-agent') || 'unknown'
+      
+      await supabase.from('approval_actions').insert({
+        pending_post_id: pendingPost.id,
+        action: 'view',
+        ip_address: ipAddress,
+        user_agent: userAgent,
+      })
+    } catch (trackError) {
+      // Não falhar se o tracking falhar
+      logger.warn('Erro ao registrar visualização', { error: trackError })
     }
 
     return NextResponse.json(pendingPost)
@@ -86,6 +117,23 @@ export async function PUT(
       )
     }
 
+    // Verificar se o link expirou
+    if (pendingPost.expires_at) {
+      const expiresAt = new Date(pendingPost.expires_at)
+      const now = new Date()
+      
+      if (now > expiresAt) {
+        return NextResponse.json(
+          { error: 'Link de aprovação expirado. O link é válido por 5 dias.' },
+          { status: 410 }
+        )
+      }
+    }
+
+    // Obter informações do cliente para tracking
+    const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+    const userAgent = request.headers.get('user-agent') || 'unknown'
+
     let updatePayload: any = {}
 
     if (action === 'approve') {
@@ -94,11 +142,30 @@ export async function PUT(
         status: 'approved',
         approved_at: new Date().toISOString(),
       }
+      
+      // Registrar ação de aprovação
+      await trackApprovalAction(supabase, {
+        action: 'approve',
+        pendingPostId: pendingPost.id,
+        ipAddress,
+        userAgent,
+        actionData: {
+          approved_at: new Date().toISOString(),
+        },
+      })
     } else if (action === 'reject') {
       // Rejeitar post
       updatePayload = {
         status: 'rejected',
       }
+      
+      // Registrar ação de rejeição
+      await trackApprovalAction(supabase, {
+        action: 'reject',
+        pendingPostId: pendingPost.id,
+        ipAddress,
+        userAgent,
+      })
     } else if (action === 'edit') {
       // Editar post
       // Se image_url for base64, manter como está (será salvo diretamente)
@@ -119,6 +186,17 @@ export async function PUT(
           )
         }
       }
+      
+      // Registrar ação de edição
+      await trackApprovalAction(supabase, {
+        action: 'edit',
+        pendingPostId: pendingPost.id,
+        ipAddress,
+        userAgent,
+        actionData: {
+          fields_edited: Object.keys(updateData),
+        },
+      })
     } else {
       return NextResponse.json({ error: 'Ação inválida' }, { status: 400 })
     }

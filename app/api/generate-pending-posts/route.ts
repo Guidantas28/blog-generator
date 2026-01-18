@@ -163,6 +163,10 @@ export async function POST(request: NextRequest) {
         // Gerar token único de aprovação
         const approvalToken = crypto.randomBytes(32).toString('hex')
 
+        // Calcular data de expiração (5 dias a partir de agora)
+        const expiresAt = new Date()
+        expiresAt.setDate(expiresAt.getDate() + 5)
+
         // Salvar post pendente
         const { data: pendingPost, error: insertError } = await supabase
           .from('pending_posts')
@@ -180,6 +184,7 @@ export async function POST(request: NextRequest) {
             scheduled_date: scheduledDateTime.toISOString(),
             status: 'pending',
             approval_token: approvalToken,
+            expires_at: expiresAt.toISOString(),
           })
           .select()
           .single()

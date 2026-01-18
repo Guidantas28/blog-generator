@@ -28,6 +28,7 @@ import PostScheduler from './PostScheduler'
 import CalendarView from './CalendarView'
 import ContentLibrary from './ContentLibrary'
 import AnalyticsDashboard from './AnalyticsDashboard'
+import ApprovalTracking from './ApprovalTracking'
 import { 
   Sparkles, 
   Globe, 
@@ -37,7 +38,8 @@ import {
   BookOpen, 
   Settings as SettingsIcon,
   Zap,
-  BarChart3
+  BarChart3,
+  CheckCircle2
 } from 'lucide-react'
 
 interface WordPressSite {
@@ -357,6 +359,21 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 <Text as="span">Analytics</Text>
               </TabsTrigger>
               <TabsTrigger 
+                value="approvals" 
+                px={4} 
+                py={3}
+                display="flex"
+                alignItems="center"
+                gap={2}
+                whiteSpace="nowrap"
+                fontSize="sm"
+                fontWeight="medium"
+                minW="fit-content"
+              >
+                <CheckCircle2 size={18} />
+                <Text as="span">Aprovações</Text>
+              </TabsTrigger>
+              <TabsTrigger 
                 value="settings" 
                 px={4} 
                 py={3}
@@ -403,6 +420,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
           </TabsContent>
           <TabsContent value="analytics" px={0}>
             <AnalyticsDashboard userId={userId} />
+          </TabsContent>
+          <TabsContent value="approvals" px={0}>
+            <ApprovalTracking />
           </TabsContent>
           <TabsContent value="settings" px={0}>
             <Settings userId={userId} />
