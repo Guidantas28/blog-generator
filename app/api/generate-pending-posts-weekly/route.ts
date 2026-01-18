@@ -298,18 +298,21 @@ async function processAutomations(
 ) {
   try {
     const results = {
+      total: automations.length,
       processed: 0,
       succeeded: 0,
       failed: 0,
+      skipped: 0,
+      skippedReasons: [] as string[],
       errors: [] as string[],
     }
 
     for (const automation of automations) {
       try {
-        results.processed++
-
         // Verificar se a automação está ativa (se a coluna existir)
         if (automation.is_active === false) {
+          results.skipped++
+          results.skippedReasons.push(`Automação ${automation.id}: está inativa`)
           logger.info(`Automação ${automation.id} está inativa, pulando...`, {
             siteId: automation.site_id,
           })
@@ -318,6 +321,8 @@ async function processAutomations(
 
         // Verificar se a automação requer aprovação (deve estar true)
         if (!automation.requires_approval) {
+          results.skipped++
+          results.skippedReasons.push(`Automação ${automation.id}: não requer aprovação`)
           logger.info(`Automação ${automation.id} não requer aprovação, pulando...`, {
             siteId: automation.site_id,
           })
@@ -335,12 +340,17 @@ async function processAutomations(
           .in('status', ['pending', 'approved', 'edited'])
 
         if (existingPosts && existingPosts.length >= 3) {
+          results.skipped++
+          results.skippedReasons.push(`Automação ${automation.id}: já existem ${existingPosts.length} posts para ${targetDate}`)
           logger.info(`Posts já existem para ${targetDate} (domingo de publicação)`, {
             siteId: automation.site_id,
             count: existingPosts.length,
           })
           continue
         }
+
+        // Se chegou aqui, vai processar
+        results.processed++
 
         // Chamar API interna para gerar posts
         // Em produção, isso funcionará via HTTP. Em desenvolvimento, pode precisar ajustar a URL
@@ -459,12 +469,23 @@ async function processAutomations(
 
     const nextSunday = getNextSunday()
     
+    logger.info('Processamento de automações concluído', {
+      total: results.total,
+      processed: results.processed,
+      succeeded: results.succeeded,
+      failed: results.failed,
+      skipped: results.skipped,
+      targetDate,
+    })
+    
     return NextResponse.json({
       message: 'Processamento concluído',
       nextSunday: nextSunday.toISOString().split('T')[0],
       publicationDate: publicationDate.toISOString().split('T')[0],
       targetDate,
       ...results,
+      // Incluir razões de skip apenas se houver
+      ...(results.skippedReasons.length > 0 && { skippedReasons: results.skippedReasons }),
     })
   } catch (error: any) {
     logger.error('Erro ao processar automações', error, {
