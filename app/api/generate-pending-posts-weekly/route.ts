@@ -256,7 +256,7 @@ async function handleGeneratePendingPosts(request: NextRequest) {
       }
 
       // Processar automações
-      return await processAutomations(automations, supabase, targetDate, publicationDate)
+      return await processAutomations(automations, supabase, targetDate, publicationDate, request)
     } catch (queryError: any) {
       logger.error('Erro inesperado ao buscar automações', queryError, {
         endpoint: '/api/generate-pending-posts-weekly',
@@ -294,7 +294,8 @@ async function processAutomations(
   automations: any[],
   supabase: any,
   targetDate: string,
-  publicationDate: Date
+  publicationDate: Date,
+  request: NextRequest
 ) {
   try {
     const results = {
@@ -329,24 +330,53 @@ async function processAutomations(
           continue
         }
 
-        // Verificar se já existem posts pendentes para esta data
-        // Buscar posts para o domingo de publicação
+        // Verificar se é execução manual
+        const manualHeader = request.headers.get('x-manual-execution') || request.headers.get('X-Manual-Execution')
+        const userAgent = request.headers.get('user-agent') || ''
+        const isManualExecution = manualHeader === 'true' || userAgent.includes('GitHub Actions')
+        
+        // Verificar se já existem posts para esta data
+        // Em execução manual: verificar apenas posts APROVADOS
+        // Em execução automática: verificar posts pendentes, aprovados ou editados
+        const statusToCheck = isManualExecution 
+          ? ['approved'] // Em execução manual, só verifica se já tem aprovados
+          : ['pending', 'approved', 'edited'] // Em execução automática, verifica todos
+        
         const { data: existingPosts } = await supabase
           .from('pending_posts')
-          .select('id')
+          .select('id, status')
           .eq('site_id', automation.site_id)
           .gte('scheduled_date', `${targetDate}T00:00:00.000Z`)
           .lt('scheduled_date', `${targetDate}T23:59:59.999Z`)
-          .in('status', ['pending', 'approved', 'edited'])
+          .in('status', statusToCheck)
 
         if (existingPosts && existingPosts.length >= 3) {
+          const statusCounts = existingPosts.reduce((acc: any, post: any) => {
+            acc[post.status] = (acc[post.status] || 0) + 1
+            return acc
+          }, {})
+          
+          const reason = isManualExecution
+            ? `Automação ${automation.id}: já existem ${existingPosts.length} posts APROVADOS para ${targetDate}`
+            : `Automação ${automation.id}: já existem ${existingPosts.length} posts (${JSON.stringify(statusCounts)}) para ${targetDate}`
+          
           results.skipped++
-          results.skippedReasons.push(`Automação ${automation.id}: já existem ${existingPosts.length} posts para ${targetDate}`)
+          results.skippedReasons.push(reason)
           logger.info(`Posts já existem para ${targetDate} (domingo de publicação)`, {
             siteId: automation.site_id,
             count: existingPosts.length,
+            statusCounts,
+            isManualExecution,
           })
           continue
+        }
+        
+        // Se é execução manual e não tem posts aprovados, logar que vai gerar
+        if (isManualExecution) {
+          logger.info(`Execução manual: não há posts aprovados para ${targetDate}, gerando novos posts`, {
+            siteId: automation.site_id,
+            existingPostsCount: existingPosts?.length || 0,
+          })
         }
 
         // Se chegou aqui, vai processar
