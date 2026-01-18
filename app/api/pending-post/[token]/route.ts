@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerClient } from '@/lib/supabase-server'
+import { getServerClient, getServiceRoleClient } from '@/lib/supabase-server'
 import { logger } from '@/lib/logger'
 import { trackApprovalAction } from '@/lib/approval-tracking'
 
@@ -19,19 +19,38 @@ export async function GET(
       return NextResponse.json({ error: 'Token não fornecido' }, { status: 400 })
     }
 
-    const supabase = await getServerClient()
+    // Usar service role client para não requerer autenticação
+    // Links de aprovação devem funcionar sem login
+    const supabase = getServiceRoleClient()
 
     // Buscar post pelo token (sem autenticação necessária)
+    // Primeiro tentar buscar sem filtrar por status para ver se o post existe
     const { data: pendingPost, error } = await supabase
       .from('pending_posts')
       .select('*, wordpress_sites(name, url)')
       .eq('approval_token', token)
-      .eq('status', 'pending')
       .single()
 
     if (error || !pendingPost) {
-      logger.warn('Post pendente não encontrado', { token })
-      return NextResponse.json({ error: 'Post não encontrado ou já processado' }, { status: 404 })
+      logger.warn('Post pendente não encontrado', { 
+        token, 
+        error: error?.message,
+        errorCode: error?.code,
+        errorDetails: error?.details,
+      })
+      return NextResponse.json({ error: 'Post não encontrado ou link inválido' }, { status: 404 })
+    }
+
+    // Verificar se o post foi rejeitado ou publicado (não pode mais ser acessado)
+    if (pendingPost.status === 'rejected' || pendingPost.status === 'published') {
+      logger.warn('Tentativa de acessar post já processado', { 
+        token, 
+        status: pendingPost.status 
+      })
+      return NextResponse.json({ 
+        error: 'Post já foi processado e não pode mais ser acessado',
+        status: pendingPost.status,
+      }, { status: 410 })
     }
 
     // Verificar se o link expirou (5 dias)
@@ -96,7 +115,9 @@ export async function PUT(
       return NextResponse.json({ error: 'Token não fornecido' }, { status: 400 })
     }
 
-    const supabase = await getServerClient()
+    // Usar service role client para não requerer autenticação
+    // Links de aprovação devem funcionar sem login
+    const supabase = getServiceRoleClient()
 
     // Buscar post pelo token
     const { data: pendingPost, error: fetchError } = await supabase
@@ -106,13 +127,19 @@ export async function PUT(
       .single()
 
     if (fetchError || !pendingPost) {
+      logger.warn('Post não encontrado para atualização', { 
+        token,
+        error: fetchError?.message,
+        errorCode: fetchError?.code,
+      })
       return NextResponse.json({ error: 'Post não encontrado' }, { status: 404 })
     }
 
-    // Verificar se o post ainda está pendente
-    if (pendingPost.status !== 'pending') {
+    // Verificar se o post ainda pode ser editado/aprovado
+    // Permitir edição mesmo se já foi editado antes, mas não se foi rejeitado ou publicado
+    if (pendingPost.status === 'rejected' || pendingPost.status === 'published') {
       return NextResponse.json(
-        { error: 'Post já foi processado' },
+        { error: 'Post já foi processado e não pode mais ser editado' },
         { status: 400 }
       )
     }

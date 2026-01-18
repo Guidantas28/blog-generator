@@ -333,23 +333,45 @@ export default function ApprovePostPage() {
 
   if (error && !post) {
     return (
-      <Container maxW="container.xl" py={8}>
-        <AlertRoot status="error">
-          <AlertIndicator />
-          <AlertContent>{error}</AlertContent>
-        </AlertRoot>
-      </Container>
+      <ChakraProvider>
+        <Box minH="100vh" bg="gray.900" py={8}>
+          <Container maxW="container.xl">
+            <AlertRoot status="error">
+              <AlertIndicator />
+              <AlertContent>
+                <Heading size="md" mb={2}>Erro ao carregar post</Heading>
+                <Text>{error}</Text>
+                <Text fontSize="sm" color="gray.400" mt={2}>
+                  O link pode ter expirado (válido por 5 dias) ou o post já foi processado.
+                </Text>
+              </AlertContent>
+            </AlertRoot>
+          </Container>
+        </Box>
+      </ChakraProvider>
     )
   }
 
   if (!post) {
     return (
-      <Container maxW="container.xl" py={8}>
-        <AlertRoot status="warning">
-          <AlertIndicator />
-          <AlertContent>Post não encontrado</AlertContent>
-        </AlertRoot>
-      </Container>
+      <ChakraProvider>
+        <Box minH="100vh" bg="gray.900" py={8}>
+          <Container maxW="container.xl">
+            <AlertRoot status="warning">
+              <AlertIndicator />
+              <AlertContent>
+                <Heading size="md" mb={2}>Post não encontrado</Heading>
+                <Text>
+                  O post que você está tentando acessar não foi encontrado.
+                </Text>
+                <Text fontSize="sm" color="gray.400" mt={2}>
+                  Possíveis motivos: link expirado (válido por 5 dias), post já processado ou link inválido.
+                </Text>
+              </AlertContent>
+            </AlertRoot>
+          </Container>
+        </Box>
+      </ChakraProvider>
     )
   }
 
@@ -614,21 +636,21 @@ export default function ApprovePostPage() {
                 </Button>
                 <Button
                   onClick={handleApprove}
-                  disabled={saving || regenerating || uploadingImage}
+                  disabled={saving || regenerating || uploadingImage || post.status === 'approved' || post.status === 'published'}
                   colorPalette="green"
                   flex={{ base: '1', md: '1' }}
                   minW={{ base: '100%', md: '180px' }}
                   loading={saving}
-                  loadingText="Aprovando..."
-                  bg="green.600"
+                  loadingText={post.status === 'approved' ? 'Já Aprovado' : 'Aprovando...'}
+                  bg={post.status === 'approved' || post.status === 'published' ? 'gray.600' : 'green.600'}
                   color="white"
                   size="lg"
                   fontWeight="semibold"
-                  _hover={{ bg: 'green.700', transform: 'translateY(-1px)', boxShadow: 'lg' }}
-                  _active={{ bg: 'green.800', transform: 'translateY(0)' }}
+                  _hover={post.status === 'approved' || post.status === 'published' ? {} : { bg: 'green.700', transform: 'translateY(-1px)', boxShadow: 'lg' }}
+                  _active={post.status === 'approved' || post.status === 'published' ? {} : { bg: 'green.800', transform: 'translateY(0)' }}
                   transition="all 0.2s"
                 >
-                  Aprovar e Publicar
+                  {post.status === 'approved' || post.status === 'published' ? 'Já Aprovado' : 'Aprovar e Publicar'}
                 </Button>
               </HStack>
             </VStack>
