@@ -18,6 +18,7 @@ jobs:
           curl -X POST "${{ secrets.APP_URL }}/api/generate-pending-posts-weekly" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" \
+            -H "X-Manual-Execution: true" \
             -f || exit 1
         env:
           APP_URL: ${{ secrets.APP_URL }}

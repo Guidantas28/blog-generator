@@ -171,12 +171,24 @@ async function handleGeneratePendingPosts(request: NextRequest) {
       )
     }
 
-    // Verificar se hoje é domingo (só deve executar aos domingos)
+    // Verificar se é execução manual (via workflow_dispatch) ou automática (cron)
+    // Se for manual, permitir execução em qualquer dia
+    const isManualExecution = request.headers.get('x-manual-execution') === 'true' || 
+                              request.headers.get('user-agent')?.includes('GitHub Actions')
+    
     const today = new Date()
     const dayOfWeek = today.getDay()
     
-    if (dayOfWeek !== 0) {
+    // Se não for execução manual e não for domingo, apenas logar mas continuar
+    // (permite testes e execuções manuais)
+    if (dayOfWeek !== 0 && !isManualExecution) {
       logger.info('API chamada fora do domingo, mas continuando processamento', {
+        dayOfWeek,
+        endpoint: '/api/generate-pending-posts-weekly',
+        isManualExecution,
+      })
+    } else if (isManualExecution) {
+      logger.info('Execução manual detectada, processando independente do dia da semana', {
         dayOfWeek,
         endpoint: '/api/generate-pending-posts-weekly',
       })
