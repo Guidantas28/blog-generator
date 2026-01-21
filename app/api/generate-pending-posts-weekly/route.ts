@@ -218,7 +218,21 @@ async function handleGeneratePendingPosts(request: NextRequest) {
             id,
             name,
             url,
-            user_id
+            user_id,
+            system_prompt,
+            content_prompt_template,
+            tone,
+            writing_style,
+            target_audience,
+            additional_instructions,
+            cta_text,
+            cta_link,
+            phone_number,
+            cta_primary_color,
+            cta_secondary_color,
+            whatsapp_color,
+            keywords_bg_color,
+            keywords_text_color
           )
         `)
         .eq('requires_approval', true) // Apenas automações com aprovação ativada

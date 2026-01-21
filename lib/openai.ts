@@ -53,7 +53,15 @@ REGRAS OBRIGATÓRIAS:
 
 Sempre retorne JSON válido.`
 
+  // Usar system_prompt personalizado se fornecido, senão usar o padrão
   let systemPrompt = agentConfig?.system_prompt || defaultSystemPrompt
+  
+  // Log para debug
+  if (agentConfig?.system_prompt) {
+    console.log('✅ Usando system_prompt personalizado:', agentConfig.system_prompt.substring(0, 100) + '...')
+  } else {
+    console.log('⚠️ Usando system_prompt padrão (nenhum personalizado fornecido)')
+  }
   
   // Adicionar informações de tom, estilo e público-alvo ao system prompt se fornecidos
   const toneInfo = agentConfig?.tone ? `\n\nTOM DE VOZ: ${agentConfig.tone}` : ''

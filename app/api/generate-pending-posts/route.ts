@@ -96,16 +96,43 @@ export async function POST(request: NextRequest) {
     })
 
     // Buscar dados do site
-    const { data: siteData, error: siteError } = await supabase
+    // Se for chamada interna, usar service role e não filtrar por user_id (RLS já bypassado)
+    let siteQuery = supabase
       .from('wordpress_sites')
       .select('*')
       .eq('id', siteId)
-      .eq('user_id', sessionUserId)
-      .single()
+    
+    // Só filtrar por user_id se não for chamada interna (para segurança)
+    if (!isInternalRequest) {
+      siteQuery = siteQuery.eq('user_id', sessionUserId)
+    }
+    
+    const { data: siteData, error: siteError } = await siteQuery.single()
 
     if (siteError || !siteData) {
-      return NextResponse.json({ error: 'Site não encontrado' }, { status: 404 })
+      logger.error('Erro ao buscar dados do site', {
+        siteId,
+        userId: sessionUserId,
+        isInternalRequest,
+        error: siteError?.message,
+        errorCode: siteError?.code,
+      })
+      return NextResponse.json({ 
+        error: 'Site não encontrado',
+        details: siteError?.message,
+      }, { status: 404 })
     }
+    
+    logger.info('Dados do site carregados', {
+      siteId,
+      siteName: siteData.name,
+      hasSystemPrompt: !!siteData.system_prompt,
+      hasContentPromptTemplate: !!siteData.content_prompt_template,
+      hasTone: !!siteData.tone,
+      hasWritingStyle: !!siteData.writing_style,
+      hasTargetAudience: !!siteData.target_audience,
+      hasAdditionalInstructions: !!siteData.additional_instructions,
+    })
 
     // Configurações do agente
     const agentConfig: AgentConfig = {
@@ -116,6 +143,23 @@ export async function POST(request: NextRequest) {
       target_audience: siteData.target_audience || undefined,
       additional_instructions: siteData.additional_instructions || undefined,
     }
+    
+    // Log detalhado das configurações do agente
+    logger.info('Configurações do agente carregadas', {
+      siteId,
+      siteName: siteData.name,
+      hasSystemPrompt: !!siteData.system_prompt,
+      systemPromptPreview: siteData.system_prompt?.substring(0, 100) || 'não configurado',
+      hasContentPromptTemplate: !!siteData.content_prompt_template,
+      hasTone: !!siteData.tone,
+      tone: siteData.tone,
+      hasWritingStyle: !!siteData.writing_style,
+      writingStyle: siteData.writing_style,
+      hasTargetAudience: !!siteData.target_audience,
+      targetAudience: siteData.target_audience,
+      hasAdditionalInstructions: !!siteData.additional_instructions,
+      additionalInstructionsPreview: siteData.additional_instructions?.substring(0, 100) || 'não configurado',
+    })
 
     const colors = {
       cta_primary_color: siteData.cta_primary_color || undefined,
