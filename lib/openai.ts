@@ -321,6 +321,123 @@ Formato de resposta (JSON):
   }
 }
 
+/**
+ * Gera tópicos únicos para posts de blog usando o system_prompt e configurações do agente
+ */
+export async function generateUniqueTopics(
+  siteName: string,
+  count: number,
+  agentConfig?: AgentConfig
+): Promise<string[]> {
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+  const currentMonth = months[now.getMonth()]
+  const currentDate = `${currentMonth} de ${currentYear}`
+
+  // Construir system prompt para geração de tópicos
+  const customSystemPrompt = agentConfig?.system_prompt
+  const hasCustomSystemPrompt = customSystemPrompt && 
+                                 typeof customSystemPrompt === 'string' &&
+                                 customSystemPrompt.trim() !== '' &&
+                                 customSystemPrompt !== 'null' &&
+                                 customSystemPrompt !== 'undefined'
+  
+  const baseSystemPrompt = hasCustomSystemPrompt 
+    ? customSystemPrompt.trim()
+    : `Você é um especialista em criação de conteúdo para blogs, SEO e marketing digital.`
+
+  // Adicionar informações adicionais do agente
+  const toneInfo = agentConfig?.tone ? `\n\nTOM DE VOZ: ${agentConfig.tone}` : ''
+  const styleInfo = agentConfig?.writing_style ? `\nESTILO DE ESCRITA: ${agentConfig.writing_style}` : ''
+  const audienceInfo = agentConfig?.target_audience ? `\nPÚBLICO-ALVO: ${agentConfig.target_audience}` : ''
+  const additionalInfo = agentConfig?.additional_instructions ? `\n\nINSTRUÇÕES ADICIONAIS:\n${agentConfig.additional_instructions}` : ''
+  
+  const systemPrompt = `${baseSystemPrompt}${toneInfo}${styleInfo}${audienceInfo}${additionalInfo}`
+
+  const prompt = `Com base nas configurações fornecidas, gere ${count} tópicos ÚNICOS e DIVERSIFICADOS para posts de blog sobre "${siteName}".
+
+⚠️ DATA ATUAL: ${currentDate} (${currentYear})
+
+REQUISITOS CRÍTICOS:
+- Cada tópico deve ser COMPLETAMENTE DIFERENTE dos outros
+- Evite variações do mesmo tema (ex: "Como investir em 2026" vs "Guia de investimentos 2026")
+- Cada tópico deve abordar um aspecto, ângulo ou tema DISTINTO
+- Use temas variados: estratégias, tendências, guias práticos, análises, comparações, etc.
+- Todos os tópicos devem ser relevantes para ${currentYear}
+- NUNCA use dados de 2023, 2024 ou 2025 como se fossem atuais
+
+Retorne APENAS um objeto JSON válido com esta estrutura:
+{
+  "topics": ["Tópico 1", "Tópico 2", "Tópico 3", ...]
+}
+
+NÃO inclua explicações, apenas o JSON.`
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4-turbo-preview',
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt,
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      temperature: 0.9, // Alta temperatura para mais diversidade
+      response_format: { type: 'json_object' },
+    })
+
+    const content = completion.choices[0]?.message?.content
+    if (!content) {
+      throw new Error('Resposta vazia da OpenAI')
+    }
+
+    const parsed = JSON.parse(content)
+    const topics = parsed.topics || []
+
+    if (!Array.isArray(topics) || topics.length === 0) {
+      throw new Error('Formato de resposta inválido')
+    }
+
+    // Garantir que temos pelo menos o número solicitado de tópicos
+    // Se tiver menos, gerar mais até completar
+    if (topics.length < count) {
+      const additionalCount = count - topics.length
+      const additionalTopics = await generateUniqueTopics(siteName, additionalCount, agentConfig)
+      return [...topics, ...additionalTopics].slice(0, count)
+    }
+
+    return topics.slice(0, count)
+  } catch (error: any) {
+    console.error('Erro ao gerar tópicos únicos:', error)
+    // Fallback: gerar tópicos genéricos mas variados
+    const fallbackTopics: string[] = []
+    const themes = [
+      'Estratégias',
+      'Tendências',
+      'Guia Completo',
+      'Análise',
+      'Comparação',
+      'Dicas Práticas',
+      'Oportunidades',
+      'Benefícios',
+      'Como Escolher',
+      'Mistérios',
+    ]
+    
+    for (let i = 0; i < count; i++) {
+      const theme = themes[i % themes.length]
+      fallbackTopics.push(`${theme} para ${siteName} em ${currentYear}`)
+    }
+    
+    return fallbackTopics
+  }
+}
+
 export async function generateKeywords(topic: string): Promise<string[]> {
   const prompt = `Gere 10 palavras-chave relevantes e otimizadas para SEO sobre o tema "${topic}".
 

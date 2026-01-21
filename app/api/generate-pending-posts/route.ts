@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerClient, getServiceRoleClient } from '@/lib/supabase-server'
-import { generateKeywords, generateBlogContent, AgentConfig } from '@/lib/openai'
+import { generateKeywords, generateBlogContent, generateUniqueTopics, AgentConfig } from '@/lib/openai'
 import { searchImages } from '@/lib/images'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 import { logger } from '@/lib/logger'
@@ -97,9 +97,29 @@ export async function POST(request: NextRequest) {
 
     // Buscar dados do site
     // Se for chamada interna, usar service role e não filtrar por user_id (RLS já bypassado)
+    // IMPORTANTE: Selecionar explicitamente todos os campos de configuração do agente
     let siteQuery = supabase
       .from('wordpress_sites')
-      .select('*')
+      .select(`
+        id,
+        name,
+        url,
+        user_id,
+        cta_text,
+        cta_link,
+        phone_number,
+        cta_primary_color,
+        cta_secondary_color,
+        whatsapp_color,
+        keywords_bg_color,
+        keywords_text_color,
+        system_prompt,
+        content_prompt_template,
+        tone,
+        writing_style,
+        target_audience,
+        additional_instructions
+      `)
       .eq('id', siteId)
     
     // Só filtrar por user_id se não for chamada interna (para segurança)
@@ -184,11 +204,55 @@ export async function POST(request: NextRequest) {
     // Gerar múltiplos posts
     const generatedPosts = []
     
+    // Gerar tópicos únicos ANTES do loop para garantir diversidade
+    logger.info('Gerando tópicos únicos', {
+      siteId,
+      siteName: siteData.name,
+      count: postCount,
+      hasSystemPrompt: !!agentConfig.system_prompt,
+    })
+    
+    let topics: string[] = []
+    try {
+      topics = await generateUniqueTopics(siteData.name, postCount, agentConfig)
+      logger.info('Tópicos únicos gerados', {
+        topicsCount: topics.length,
+        topics: topics.map(t => t.substring(0, 50)),
+      })
+    } catch (error: any) {
+      logger.error('Erro ao gerar tópicos únicos, usando fallback', {
+        error: error.message,
+        siteId,
+      })
+      // Fallback: gerar tópicos variados manualmente
+      const themes = [
+        'Estratégias Avançadas',
+        'Tendências do Mercado',
+        'Guia Completo',
+        'Análise Detalhada',
+        'Comparação de Opções',
+        'Dicas Práticas',
+        'Oportunidades',
+        'Benefícios',
+        'Como Escolher',
+        'Mistérios Revelados',
+      ]
+      for (let i = 0; i < postCount; i++) {
+        const theme = themes[i % themes.length]
+        topics.push(`${theme} para ${siteData.name}`)
+      }
+    }
+    
     for (let i = 0; i < postCount; i++) {
       try {
-        // Gerar tópico baseado na categoria do negócio ou usar um genérico
-        // Por enquanto, vamos usar um tópico genérico que pode ser personalizado
-        const topic = `Conteúdo ${i + 1} para ${siteData.name}`
+        // Usar tópico único gerado anteriormente
+        const topic = topics[i] || `Conteúdo ${i + 1} para ${siteData.name}`
+        
+        logger.info(`Gerando post ${i + 1}/${postCount}`, {
+          topic,
+          hasAgentConfig: !!agentConfig,
+          systemPrompt: agentConfig.system_prompt?.substring(0, 100) || 'não configurado',
+        })
         
         // Gerar palavras-chave
         const keywords = await generateKeywords(topic)
