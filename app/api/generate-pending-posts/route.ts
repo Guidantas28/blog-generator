@@ -135,21 +135,26 @@ export async function POST(request: NextRequest) {
     })
 
     // Configurações do agente
+    // Converter null/empty string para undefined, mas manter strings válidas
     const agentConfig: AgentConfig = {
-      system_prompt: siteData.system_prompt || undefined,
-      content_prompt_template: siteData.content_prompt_template || undefined,
-      tone: siteData.tone || undefined,
-      writing_style: siteData.writing_style || undefined,
-      target_audience: siteData.target_audience || undefined,
-      additional_instructions: siteData.additional_instructions || undefined,
+      system_prompt: (siteData.system_prompt && siteData.system_prompt.trim() !== '') ? siteData.system_prompt : undefined,
+      content_prompt_template: (siteData.content_prompt_template && siteData.content_prompt_template.trim() !== '') ? siteData.content_prompt_template : undefined,
+      tone: (siteData.tone && siteData.tone.trim() !== '') ? siteData.tone : undefined,
+      writing_style: (siteData.writing_style && siteData.writing_style.trim() !== '') ? siteData.writing_style : undefined,
+      target_audience: (siteData.target_audience && siteData.target_audience.trim() !== '') ? siteData.target_audience : undefined,
+      additional_instructions: (siteData.additional_instructions && siteData.additional_instructions.trim() !== '') ? siteData.additional_instructions : undefined,
     }
     
     // Log detalhado das configurações do agente
     logger.info('Configurações do agente carregadas', {
       siteId,
       siteName: siteData.name,
+      rawSystemPrompt: siteData.system_prompt,
+      rawSystemPromptType: typeof siteData.system_prompt,
+      rawSystemPromptLength: siteData.system_prompt?.length || 0,
       hasSystemPrompt: !!siteData.system_prompt,
-      systemPromptPreview: siteData.system_prompt?.substring(0, 100) || 'não configurado',
+      systemPromptPreview: siteData.system_prompt?.substring(0, 200) || 'não configurado',
+      agentConfigSystemPrompt: agentConfig.system_prompt?.substring(0, 200) || 'undefined',
       hasContentPromptTemplate: !!siteData.content_prompt_template,
       hasTone: !!siteData.tone,
       tone: siteData.tone,
@@ -181,6 +186,13 @@ export async function POST(request: NextRequest) {
         // Gerar palavras-chave
         const keywords = await generateKeywords(topic)
         const keywordsArray = Array.isArray(keywords) ? keywords : []
+
+        // Log antes de gerar conteúdo
+        logger.info('Chamando generateBlogContent', {
+          topic,
+          hasAgentConfig: !!agentConfig,
+          systemPrompt: agentConfig.system_prompt?.substring(0, 200) || 'não configurado',
+        })
 
         // Gerar conteúdo
         const content = await generateBlogContent(

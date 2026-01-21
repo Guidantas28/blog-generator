@@ -188,46 +188,89 @@ export async function GET(request: NextRequest) {
     // Processar cada automação
     for (const automation of automations) {
       try {
-        // Verificar se deve executar
-        // Buscar última execução bem-sucedida
-        const { data: lastExecution } = await supabase
-          .from('automation_executions')
-          .select('started_at')
-          .eq('automation_id', automation.id)
-          .eq('status', 'completed')
-          .order('started_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-
-        let shouldRun = false
-        if (!lastExecution) {
-          // Se não há execução anterior, pode executar
-          shouldRun = true
-        } else {
-          // Calcular dias desde última execução
-          const lastDate = new Date(lastExecution.started_at)
-          const now = new Date()
-          const daysDiff = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24))
-
-          // Verificar frequência
-          switch (automation.frequency) {
-            case 'weekly':
-              shouldRun = daysDiff >= 7
-              break
-            case 'biweekly':
-              shouldRun = daysDiff >= 14
-              break
-            case 'monthly':
-              shouldRun = daysDiff >= 30
-              break
-            default:
-              shouldRun = false
+        const today = new Date()
+        const dayOfWeek = today.getDay() // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+        
+        // Verificar se hoje é um dos dias selecionados
+        if (automation.selected_days && Array.isArray(automation.selected_days) && automation.selected_days.length > 0) {
+          // Converter selected_days para formato correto (0-6)
+          // Se selected_days está em formato diferente, ajustar
+          const selectedDays = automation.selected_days.map((day: number) => {
+            // Se estiver em formato 1-7 (domingo=1), converter para 0-6
+            return day > 6 ? day - 1 : day
+          })
+          
+          if (!selectedDays.includes(dayOfWeek)) {
+            console.log(`Automação ${automation.id}: hoje (${dayOfWeek}) não está nos dias selecionados (${selectedDays.join(', ')}). Pulando...`)
+            continue
           }
         }
 
-        if (!shouldRun) {
+        // Verificar quantos posts já foram gerados nesta semana
+        const startOfWeek = new Date(today)
+        startOfWeek.setDate(today.getDate() - dayOfWeek) // Domingo da semana atual
+        startOfWeek.setHours(0, 0, 0, 0)
+        
+        const endOfWeek = new Date(startOfWeek)
+        endOfWeek.setDate(startOfWeek.getDate() + 7)
+        
+        // Buscar posts publicados nesta semana para esta automação
+        const { data: postsThisWeek } = await supabase
+          .from('published_posts')
+          .select('id')
+          .eq('site_id', automation.site_id)
+          .gte('created_at', startOfWeek.toISOString())
+          .lt('created_at', endOfWeek.toISOString())
+
+        const postsCountThisWeek = postsThisWeek?.length || 0
+        const daysPerWeek = automation.days_per_week || 1
+        
+        // Verificar se já atingiu o limite de posts da semana
+        if (postsCountThisWeek >= daysPerWeek) {
+          console.log(`Automação ${automation.id}: já gerou ${postsCountThisWeek} post(s) esta semana (limite: ${daysPerWeek}). Pulando...`)
           continue
         }
+
+        // Se frequency for diferente de 'daily', verificar intervalo desde última execução
+        if (automation.frequency && automation.frequency !== 'daily') {
+          const { data: lastExecution } = await supabase
+            .from('automation_executions')
+            .select('started_at')
+            .eq('automation_id', automation.id)
+            .eq('status', 'completed')
+            .order('started_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (lastExecution) {
+            const lastDate = new Date(lastExecution.started_at)
+            const daysDiff = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24))
+
+            // Verificar frequência
+            switch (automation.frequency) {
+              case 'weekly':
+                if (daysDiff < 7) {
+                  console.log(`Automação ${automation.id}: frequência semanal, última execução há ${daysDiff} dias. Pulando...`)
+                  continue
+                }
+                break
+              case 'biweekly':
+                if (daysDiff < 14) {
+                  console.log(`Automação ${automation.id}: frequência quinzenal, última execução há ${daysDiff} dias. Pulando...`)
+                  continue
+                }
+                break
+              case 'monthly':
+                if (daysDiff < 30) {
+                  console.log(`Automação ${automation.id}: frequência mensal, última execução há ${daysDiff} dias. Pulando...`)
+                  continue
+                }
+                break
+            }
+          }
+        }
+        
+        console.log(`✅ Automação ${automation.id}: condições atendidas - dia ${dayOfWeek} selecionado, ${postsCountThisWeek}/${daysPerWeek} posts esta semana`)
 
         // Verificar se já existe uma execução em andamento (proteção contra duplicatas)
         const { data: runningExecution } = await supabase

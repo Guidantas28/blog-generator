@@ -54,13 +54,25 @@ REGRAS OBRIGATÓRIAS:
 Sempre retorne JSON válido.`
 
   // Usar system_prompt personalizado se fornecido, senão usar o padrão
-  let systemPrompt = agentConfig?.system_prompt || defaultSystemPrompt
+  // Verificar se existe e não está vazio
+  const hasCustomSystemPrompt = agentConfig?.system_prompt && 
+                                 agentConfig.system_prompt.trim() !== '' &&
+                                 agentConfig.system_prompt !== null
+  
+  let systemPrompt = hasCustomSystemPrompt ? agentConfig.system_prompt! : defaultSystemPrompt
   
   // Log para debug
-  if (agentConfig?.system_prompt) {
-    console.log('✅ Usando system_prompt personalizado:', agentConfig.system_prompt.substring(0, 100) + '...')
+  if (hasCustomSystemPrompt) {
+    console.log('✅ Usando system_prompt personalizado:', agentConfig.system_prompt!.substring(0, 200) + '...')
+    console.log('📝 System prompt completo:', agentConfig.system_prompt)
   } else {
-    console.log('⚠️ Usando system_prompt padrão (nenhum personalizado fornecido)')
+    console.log('⚠️ Usando system_prompt padrão')
+    console.log('🔍 Debug agentConfig:', {
+      hasAgentConfig: !!agentConfig,
+      systemPromptValue: agentConfig?.system_prompt,
+      systemPromptType: typeof agentConfig?.system_prompt,
+      systemPromptLength: agentConfig?.system_prompt?.length || 0,
+    })
   }
   
   // Adicionar informações de tom, estilo e público-alvo ao system prompt se fornecidos
