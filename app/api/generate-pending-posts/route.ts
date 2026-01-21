@@ -136,13 +136,20 @@ export async function POST(request: NextRequest) {
 
     // Configurações do agente
     // Converter null/empty string para undefined, mas manter strings válidas
+    // IMPORTANTE: Não usar || undefined pois pode perder valores válidos como "0" ou false
+    const normalizeString = (value: any): string | undefined => {
+      if (value === null || value === undefined) return undefined
+      const str = String(value).trim()
+      return str !== '' ? str : undefined
+    }
+    
     const agentConfig: AgentConfig = {
-      system_prompt: (siteData.system_prompt && siteData.system_prompt.trim() !== '') ? siteData.system_prompt : undefined,
-      content_prompt_template: (siteData.content_prompt_template && siteData.content_prompt_template.trim() !== '') ? siteData.content_prompt_template : undefined,
-      tone: (siteData.tone && siteData.tone.trim() !== '') ? siteData.tone : undefined,
-      writing_style: (siteData.writing_style && siteData.writing_style.trim() !== '') ? siteData.writing_style : undefined,
-      target_audience: (siteData.target_audience && siteData.target_audience.trim() !== '') ? siteData.target_audience : undefined,
-      additional_instructions: (siteData.additional_instructions && siteData.additional_instructions.trim() !== '') ? siteData.additional_instructions : undefined,
+      system_prompt: normalizeString(siteData.system_prompt),
+      content_prompt_template: normalizeString(siteData.content_prompt_template),
+      tone: normalizeString(siteData.tone),
+      writing_style: normalizeString(siteData.writing_style),
+      target_audience: normalizeString(siteData.target_audience),
+      additional_instructions: normalizeString(siteData.additional_instructions),
     }
     
     // Log detalhado das configurações do agente
