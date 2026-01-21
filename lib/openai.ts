@@ -55,24 +55,40 @@ Sempre retorne JSON válido.`
 
   // Usar system_prompt personalizado se fornecido, senão usar o padrão
   // Verificar se existe e não está vazio
-  const hasCustomSystemPrompt = agentConfig?.system_prompt && 
-                                 agentConfig.system_prompt.trim() !== '' &&
-                                 agentConfig.system_prompt !== null
+  const customSystemPrompt = agentConfig?.system_prompt
+  const hasCustomSystemPrompt = customSystemPrompt && 
+                                 typeof customSystemPrompt === 'string' &&
+                                 customSystemPrompt.trim() !== '' &&
+                                 customSystemPrompt !== 'null' &&
+                                 customSystemPrompt !== 'undefined'
   
-  let systemPrompt = hasCustomSystemPrompt ? agentConfig.system_prompt! : defaultSystemPrompt
+  let systemPrompt = hasCustomSystemPrompt ? customSystemPrompt.trim() : defaultSystemPrompt
   
   // Log para debug
+  console.log('🔍 DEBUG SYSTEM PROMPT:', {
+    hasAgentConfig: !!agentConfig,
+    customSystemPromptRaw: customSystemPrompt,
+    customSystemPromptType: typeof customSystemPrompt,
+    customSystemPromptLength: customSystemPrompt?.length || 0,
+    hasCustomSystemPrompt,
+    willUseCustom: hasCustomSystemPrompt,
+    systemPromptPreview: systemPrompt.substring(0, 200),
+  })
+  
   if (hasCustomSystemPrompt) {
-    console.log('✅ Usando system_prompt personalizado:', agentConfig.system_prompt!.substring(0, 200) + '...')
-    console.log('📝 System prompt completo:', agentConfig.system_prompt)
+    console.log('✅ USANDO system_prompt PERSONALIZADO')
+    console.log('📝 System prompt completo:', customSystemPrompt)
   } else {
-    console.log('⚠️ Usando system_prompt padrão')
-    console.log('🔍 Debug agentConfig:', {
-      hasAgentConfig: !!agentConfig,
-      systemPromptValue: agentConfig?.system_prompt,
-      systemPromptType: typeof agentConfig?.system_prompt,
-      systemPromptLength: agentConfig?.system_prompt?.length || 0,
-    })
+    console.log('⚠️ USANDO system_prompt PADRÃO')
+    if (agentConfig?.system_prompt) {
+      console.log('❌ System prompt fornecido mas rejeitado:', {
+        value: agentConfig.system_prompt,
+        type: typeof agentConfig.system_prompt,
+        isEmpty: agentConfig.system_prompt.trim() === '',
+        isNull: agentConfig.system_prompt === null,
+        isUndefined: agentConfig.system_prompt === undefined,
+      })
+    }
   }
   
   // Adicionar informações de tom, estilo e público-alvo ao system prompt se fornecidos
