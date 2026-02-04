@@ -57,19 +57,29 @@ export default function AnalyticsDashboard({ userId }: { userId: string }) {
         periodStart.setFullYear(now.getFullYear() - 1)
       }
 
+      // Buscar sites PRIMEIRO (query rápida e simples)
+      const { data: sitesData, error: sitesError } = await supabase
+        .from('wordpress_sites')
+        .select('id, name')
+        .eq('user_id', userId)
+        .limit(100)
+
+      if (sitesError) {
+        console.error('Erro ao buscar sites:', sitesError)
+        // Não falhar completamente, continuar sem sites
+      }
+
+      // Criar mapa de sites para lookup rápido
+      const sitesMap = new Map((sitesData || []).map((site: any) => [site.id, site.name]))
+
       // Buscar posts - selecionar apenas campos necessários (NÃO incluir 'content' que é muito grande)
       // Adicionar limite para evitar timeout em grandes volumes de dados
+      // REMOVER JOIN para evitar problemas de performance
       const maxPosts = period === 'year' ? 1000 : period === 'month' ? 500 : 200
       
       const { data: postsData, error: postsError } = await supabase
         .from('published_posts')
-        .select(`
-          id,
-          site_id,
-          keywords,
-          created_at,
-          wordpress_sites!inner(name)
-        `)
+        .select('id, site_id, keywords, created_at')
         .eq('user_id', userId)
         .gte('created_at', periodStart.toISOString())
         .order('created_at', { ascending: false })
@@ -78,18 +88,6 @@ export default function AnalyticsDashboard({ userId }: { userId: string }) {
       if (postsError) {
         console.error('Erro ao buscar posts:', postsError)
         throw postsError
-      }
-
-      // Buscar sites (query separada e mais simples)
-      const { data: sitesData, error: sitesError } = await supabase
-        .from('wordpress_sites')
-        .select('id, name')
-        .eq('user_id', userId)
-        .limit(100) // Limitar sites também
-
-      if (sitesError) {
-        console.error('Erro ao buscar sites:', sitesError)
-        // Não falhar completamente, continuar sem sites
       }
 
       // Buscar automações - selecionar apenas campos necessários
@@ -130,14 +128,11 @@ export default function AnalyticsDashboard({ userId }: { userId: string }) {
         }
       ).length || 0
 
-      // Calcular site mais ativo
+      // Calcular site mais ativo usando o mapa de sites
       const siteCounts = new Map<string, { name: string; count: number }>()
       postsData?.forEach((post: any) => {
         const siteId = post.site_id
-        // Usar nome do site do join ou buscar do sitesData
-        const siteName = post.wordpress_sites?.name || 
-                        sitesData?.find((s: any) => s.id === siteId)?.name || 
-                        'Desconhecido'
+        const siteName = sitesMap.get(siteId) || 'Desconhecido'
         const current = siteCounts.get(siteId) || { name: siteName, count: 0 }
         siteCounts.set(siteId, { ...current, count: current.count + 1 })
       })
