@@ -60,34 +60,45 @@ export default function PostsDashboard({ userId }: { userId: string }) {
       setLoading(true)
       setError(null)
       
-      // Buscar posts
+      // Buscar posts - selecionar apenas campos necessários e adicionar limite
+      // NÃO buscar 'content' que pode ser muito grande e causar timeout
       const { data: postsData, error: postsError } = await supabase
         .from('published_posts')
-        .select('*')
+        .select(`
+          id,
+          topic,
+          title,
+          wordpress_post_url,
+          wordpress_post_id,
+          site_id,
+          keywords,
+          created_at,
+          status,
+          excerpt,
+          wordpress_sites!inner(id, name)
+        `)
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
+        .limit(100) // Limitar a 100 posts para evitar timeout
 
       if (postsError) {
         console.error('Erro ao buscar posts:', postsError)
         throw new Error(`Erro ao buscar posts: ${postsError.message}`)
       }
 
-      // Buscar sites para fazer o join
-      const { data: sitesData, error: sitesError } = await supabase
-        .from('wordpress_sites')
-        .select('id, name')
-        .eq('user_id', userId)
-
-      if (sitesError) {
-        console.error('Erro ao buscar sites:', sitesError)
-        // Não falhar completamente se sites falhar, apenas logar
-      }
-
-      const sitesMap = new Map((sitesData || []).map((site: any) => [site.id, site.name]))
-
+      // Mapear posts com nome do site (já vem do join)
       const postsWithSiteName = (postsData || []).map((post: any) => ({
-        ...post,
-        site_name: sitesMap.get(post.site_id) || 'Site desconhecido',
+        id: post.id,
+        topic: post.topic,
+        title: post.title,
+        wordpress_post_url: post.wordpress_post_url,
+        wordpress_post_id: post.wordpress_post_id,
+        site_id: post.site_id,
+        keywords: post.keywords,
+        created_at: post.created_at,
+        status: post.status,
+        excerpt: post.excerpt,
+        site_name: post.wordpress_sites?.name || 'Site desconhecido',
       }))
 
       setPosts(postsWithSiteName)

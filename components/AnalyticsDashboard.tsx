@@ -57,48 +57,87 @@ export default function AnalyticsDashboard({ userId }: { userId: string }) {
         periodStart.setFullYear(now.getFullYear() - 1)
       }
 
-      // Buscar posts
+      // Buscar posts - selecionar apenas campos necessários (NÃO incluir 'content' que é muito grande)
+      // Adicionar limite para evitar timeout em grandes volumes de dados
+      const maxPosts = period === 'year' ? 1000 : period === 'month' ? 500 : 200
+      
       const { data: postsData, error: postsError } = await supabase
         .from('published_posts')
-        .select('*, wordpress_sites(name)')
+        .select(`
+          id,
+          site_id,
+          keywords,
+          created_at,
+          wordpress_sites!inner(name)
+        `)
         .eq('user_id', userId)
         .gte('created_at', periodStart.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(maxPosts)
 
-      if (postsError) throw postsError
+      if (postsError) {
+        console.error('Erro ao buscar posts:', postsError)
+        throw postsError
+      }
 
-      // Buscar sites
-      const { data: sitesData } = await supabase
+      // Buscar sites (query separada e mais simples)
+      const { data: sitesData, error: sitesError } = await supabase
         .from('wordpress_sites')
         .select('id, name')
         .eq('user_id', userId)
+        .limit(100) // Limitar sites também
 
-      // Buscar automações
-      const { data: automationsData } = await supabase
+      if (sitesError) {
+        console.error('Erro ao buscar sites:', sitesError)
+        // Não falhar completamente, continuar sem sites
+      }
+
+      // Buscar automações - selecionar apenas campos necessários
+      const { data: automationsData, error: automationsError } = await supabase
         .from('automation_executions')
-        .select('*')
+        .select('id, status, created_at')
         .eq('user_id', userId)
         .gte('created_at', periodStart.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(500) // Limitar automações também
+
+      if (automationsError) {
+        console.error('Erro ao buscar automações:', automationsError)
+        // Não falhar completamente, continuar sem automações
+      }
 
       // Calcular estatísticas
-      const totalPosts = postsData?.length || 0
       const nowDate = new Date()
       const thisMonthStart = new Date(nowDate.getFullYear(), nowDate.getMonth(), 1)
       const thisWeekStart = new Date(nowDate)
       thisWeekStart.setDate(nowDate.getDate() - 7)
 
+      // Contar posts (usar dados já filtrados por período)
+      const totalPosts = postsData?.length || 0
+      
+      // Filtrar posts deste mês e semana (já temos dados do período)
       const postsThisMonth = postsData?.filter(
-        (p: any) => new Date(p.created_at) >= thisMonthStart
+        (p: any) => {
+          const postDate = new Date(p.created_at)
+          return postDate >= thisMonthStart && postDate <= nowDate
+        }
       ).length || 0
 
       const postsThisWeek = postsData?.filter(
-        (p: any) => new Date(p.created_at) >= thisWeekStart
+        (p: any) => {
+          const postDate = new Date(p.created_at)
+          return postDate >= thisWeekStart && postDate <= nowDate
+        }
       ).length || 0
 
       // Calcular site mais ativo
       const siteCounts = new Map<string, { name: string; count: number }>()
       postsData?.forEach((post: any) => {
         const siteId = post.site_id
-        const siteName = post.wordpress_sites?.name || 'Desconhecido'
+        // Usar nome do site do join ou buscar do sitesData
+        const siteName = post.wordpress_sites?.name || 
+                        sitesData?.find((s: any) => s.id === siteId)?.name || 
+                        'Desconhecido'
         const current = siteCounts.get(siteId) || { name: siteName, count: 0 }
         siteCounts.set(siteId, { ...current, count: current.count + 1 })
       })
@@ -162,8 +201,10 @@ export default function AnalyticsDashboard({ userId }: { userId: string }) {
           failed: failedAutomations,
         },
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao carregar analytics:', error)
+      // Se houver erro, definir analytics como null para mostrar mensagem
+      setAnalytics(null)
     } finally {
       setLoading(false)
     }
